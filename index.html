@@ -285,6 +285,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="stat"><div class="lbl">Completed</div><div class="val" id="s-done">—</div></div>
     </div>
     <div id="dash-season-banner"></div>
+    <div class="srow" style="margin-bottom:8px">
+      <select id="dash-loc-f" onchange="renderDash()" style="min-width:160px">
+        <option value="">All Locations</option>
+        <option value="Yellville">Yellville</option>
+        <option value="Harrison">Harrison</option>
+      </select>
+    </div>
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Active Orders</div>
     <div id="dash-list"><div class="empty">Loading...</div></div>
     <div class="po-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px">
@@ -319,6 +326,11 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <option>Waiting on Parts</option><option>Ready</option><option>Picked Up</option>
       </select>
       <select id="wo-tf" onchange="renderOrders()" style="min-width:120px"><option value="">All Techs</option></select>
+      <select id="wo-lf" onchange="renderOrders()" style="min-width:130px">
+        <option value="">All Locations</option>
+        <option value="Yellville">Yellville</option>
+        <option value="Harrison">Harrison</option>
+      </select>
     </div>
     <div id="wo-list"><div class="empty">Loading...</div></div>
   </div>
@@ -480,6 +492,15 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px">
     <input type="checkbox" id="m-urg" style="width:15px;height:15px;accent-color:var(--red)"> Mark as Priority / Urgent
   </label>
+  <div class="g2" style="margin-bottom:0">
+    <div class="f"><label>Location</label>
+      <select id="m-location">
+        <option value="Yellville">Yellville</option>
+        <option value="Harrison">Harrison</option>
+      </select>
+    </div>
+    <div class="f"><label>Hang Tag #</label><input type="text" id="m-tag" placeholder="e.g. A-14"></div>
+  </div>
   <div class="sect-lbl">Equipment Record</div>
   <div class="g3">
     <div class="f"><label>Equipment Type</label>
@@ -915,7 +936,7 @@ function removeTech(n){requireAdminDelete('Remove tech '+n+'?',function(){TECHS=
 function renderTechs(){var el=document.getElementById('tech-chips');if(!el)return;el.innerHTML=TECHS.map(function(t){return '<span class="tech-chip">'+t+'<button onclick="removeTech(\''+t+'\')">&#x2715;</button></span>';}).join('');}
 function populateTechSels(){['m-tech','wo-tf'].forEach(function(id){var sel=document.getElementById(id);if(!sel)return;var cur=sel.value;sel.innerHTML=id==='m-tech'?'<option>Unassigned</option>':'<option value="">All Techs</option>';TECHS.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);});if(cur)sel.value=cur;});}
 function populateCustSel(){/* replaced by custSearch */}
-function populateCustSelLegacy(){var sel=document.getElementById('m-cust');if(!sel||sel.tagName!=='SELECT')return;var cur=sel.value;sel.innerHTML='<option value="">-- Select Customer --</option>';custArr().forEach(function(c){var o=document.createElement('option');o.value=c.id;o.textContent=c.first+' '+c.last+(c.phone?' ('+c.phone+')':'');sel.appendChild(o);});if(cur)sel.value=cur;}
+
 
 function orderArr(){return Object.values(ORDERS).sort(function(a,b){if(b.urgent!==a.urgent)return(b.urgent?1:0)-(a.urgent?1:0);var da=a.dateIn||'',db=b.dateIn||'';if(da&&db)return da<db?-1:da>db?1:0;return a.woNum-b.woNum;});}
 function custArr(){return Object.values(CUSTS).sort(function(a,b){return(a.last||'').localeCompare(b.last||'');});}
@@ -937,7 +958,8 @@ document.getElementById('m-est-hrs').addEventListener('input',updateHrsVariance)
 document.getElementById('m-act-hrs').addEventListener('input',updateHrsVariance);
 
 function renderDash(){
-  var all=orderArr(),open=all.filter(function(o){return o.status!=='Picked Up';}),urg=open.filter(function(o){return o.urgent;}),parts=open.filter(function(o){return o.status==='Waiting on Parts';}),ready=open.filter(function(o){return o.status==='Ready';}),done=all.filter(function(o){return o.status==='Picked Up';});
+  var locF=(document.getElementById('dash-loc-f')||{}).value||'';
+  var all=orderArr(),open=all.filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF);}),urg=open.filter(function(o){return o.urgent;}),parts=open.filter(function(o){return o.status==='Waiting on Parts';}),ready=open.filter(function(o){return o.status==='Ready';}),done=all.filter(function(o){return o.status==='Picked Up'&&(!locF||o.location===locF);});
   document.getElementById('s-open').textContent=open.length;document.getElementById('s-urg').textContent=urg.length;
   document.getElementById('s-parts').textContent=parts.length;document.getElementById('s-ready').textContent=ready.length;document.getElementById('s-done').textContent=done.length;
   var el=document.getElementById('dash-list');
@@ -967,8 +989,8 @@ function renderBoard(){
 }
 
 function renderOrders(){
-  var q=(document.getElementById('wo-q').value||'').toLowerCase(),f=document.getElementById('wo-f').value,tf=document.getElementById('wo-tf').value;
-  var list=orderArr().filter(function(o){var c=CUSTS[o.custId]||{};var txt=((c.first||'')+' '+(c.last||'')+' '+(o.brand||'')+' '+(o.equipType||'')+' '+(o.model||'')+' '+(o.serial||'')+' '+o.woNum).toLowerCase();return(!q||txt.indexOf(q)>=0)&&(!f||o.status===f)&&(!tf||o.tech===tf);});
+  var q=(document.getElementById('wo-q').value||'').toLowerCase(),f=document.getElementById('wo-f').value,tf=document.getElementById('wo-tf').value,lf=document.getElementById('wo-lf').value;
+  var list=orderArr().filter(function(o){var c=CUSTS[o.custId]||{};var txt=((c.first||'')+' '+(c.last||'')+' '+(o.brand||'')+' '+(o.equipType||'')+' '+(o.model||'')+' '+(o.serial||'')+' '+o.woNum).toLowerCase();return(!q||txt.indexOf(q)>=0)&&(!f||o.status===f)&&(!tf||o.tech===tf)&&(!lf||o.location===lf);});
   var el=document.getElementById('wo-list');
   if(!list.length){el.innerHTML='<div class="empty">No orders found.</div>';return;}
   el.innerHTML=list.map(function(o){return woRow(o,CUSTS[o.custId]||{});}).join('');
@@ -994,9 +1016,9 @@ function woRow(o,c){
     +'<div class="wo-main">'
     +'<div class="wo-cust">'+custName+(c&&c.phone?'<span style="font-size:19px;font-weight:700;color:var(--dark);margin-left:12px">'+c.phone+'</span>':'')+'</div>'
     +'<div class="wo-equip">'+equip+(o.serial?' | SN: '+o.serial:'')+(isWaiting&&o.partsWaiting?' · '+o.partsWaiting:'')+'</div>'
-    +(o.dateIn?'<div style="font-size:15px;font-weight:700;color:var(--muted);margin-top:3px">In: '+o.dateIn+(o.tech?' · '+o.tech:'')+'</div>':'')
+    +(o.dateIn?'<div style="font-size:15px;font-weight:700;color:var(--muted);margin-top:3px">In: '+o.dateIn+(o.estDate?' · Est: '+o.estDate:'')+(o.tech?' · '+o.tech:'')+'</div>':'')
     +'</div>'
-    +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+(o.estHrs?'<span style="font-size:10px;color:var(--muted)">'+o.estHrs+'h</span>':'')+'</div>'
+    +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+(o.estHrs?'<span style="font-size:10px;color:var(--muted)">'+o.estHrs+'h</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
     +'</div>';
 }
 
@@ -1012,7 +1034,8 @@ function renderCustomers(){
 function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
-  ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-est-hrs','m-act-hrs','m-bill-hrs'].forEach(function(id){document.getElementById(id).value='';});custClear();
+  ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-est-hrs','m-act-hrs','m-bill-hrs','m-tag'].forEach(function(id){document.getElementById(id).value='';});custClear();
+  document.getElementById('m-location').value='Yellville';
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
   document.getElementById('m-urg').checked=false;document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
@@ -1035,6 +1058,8 @@ function openEditWO(id){
   document.getElementById('m-urg').checked=!!o.urgent;document.getElementById('m-deposit').checked=!!o.deposit;document.getElementById('m-paid').checked=!!o.paid;document.getElementById('m-parts-waiting').value=o.partsWaiting||'';
   document.getElementById('m-est-hrs').value=o.estHrs||'';document.getElementById('m-act-hrs').value=o.actHrs||'';
   document.getElementById('m-bill-hrs').value=o.billHrs||'';
+  document.getElementById('m-tag').value=o.tag||'';
+  document.getElementById('m-location').value=o.location||'Yellville';
   document.getElementById('waiting-parts-row').style.display=o.status==='Waiting on Parts'?'block':'none';
   updateHrsVariance();
   var pb=document.getElementById('pt-body');pb.innerHTML='';(o.parts||[]).forEach(function(p){appPR(p);});
@@ -1050,7 +1075,7 @@ function saveWO(){
   var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
   var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
   var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
-  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,estHrs:document.getElementById('m-est-hrs').value,actHrs:document.getElementById('m-act-hrs').value,billHrs:document.getElementById('m-bill-hrs').value,parts:getParts()};
+  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,location:document.getElementById('m-location').value,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,estHrs:document.getElementById('m-est-hrs').value,actHrs:document.getElementById('m-act-hrs').value,billHrs:document.getElementById('m-bill-hrs').value,parts:getParts()};
   writeOrder(o);closeM('wo-modal');
 }
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
@@ -1113,9 +1138,10 @@ function openDet(id){
   var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+o.partsWaiting+'</div>':'';
   var est=parseFloat(o.estHrs)||0,act=parseFloat(o.actHrs)||0,bill=parseFloat(o.billHrs)||0;
   var hrsHtml=(est||act||bill)?'<div class="sect-lbl">Hours</div><div class="g3">'+(est?'<div><div class="df-lbl">Estimated</div><div class="df-val">'+est.toFixed(2)+'h</div></div>':'')+(act?'<div><div class="df-lbl">Actual</div><div class="df-val">'+act.toFixed(2)+'h'+(est&&act?'<span style="margin-left:6px;font-size:14px;color:'+(act>est?'var(--red)':'#2d7d1e')+'">'+(act>est?'+':'')+(act-est).toFixed(2)+'h</span>':'')+'</div></div>':'')+(bill?'<div><div class="df-lbl">Billed</div><div class="df-val">'+bill.toFixed(2)+'h</div></div>':'')+'</div>':'';
+  var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
   document.getElementById('det-body').innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
-    +wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
+    +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
     +(o.notes?'<div style="margin-bottom:8px"><div class="df-lbl">Tech Notes</div><div class="df-val">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
@@ -1208,7 +1234,7 @@ function editCust(id){var c=CUSTS[id];if(!c)return;editCid=id;document.getElemen
 function printWO(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
   var prows=(o.parts||[]).map(function(p){return '<tr><td style="padding:6px 8px;border-bottom:1px solid #e0e0e0">'+p.desc+'</td><td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;text-align:center">'+p.qty+'</td><td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;color:#555">'+(p.note||'')+'</td></tr>';}).join('');
-  var locAddr=(c.addr&&c.addr.toLowerCase().indexOf('harrison')>=0)?'#2 Necessity Ave &middot; Harrison, AR 72601 &middot; (870) 741-3493':'1609 Hwy 62 West &middot; Yellville, AR 72687 &middot; (870) 449-4255';
+  var locAddr=(o.location==='Harrison')?'#2 Necessity Ave &middot; Harrison, AR 72601 &middot; (870) 741-3493':'1609 Hwy 62 West &middot; Yellville, AR 72687 &middot; (870) 449-4255';
   var bill=parseFloat(o.billHrs)||0;
   var html='<div style="font-family:Barlow,Arial,sans-serif;max-width:760px;margin:0 auto;padding:16px 20px;color:#1a1a1a"><div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a1a1a;padding-bottom:10px;margin-bottom:14px"><div><div style="font-size:22px;font-weight:800;line-height:1">MILLER <span style="color:#1a1a1a">HARDWARE</span></div><div style="font-size:11px;color:#888;margin-top:2px;text-transform:uppercase;letter-spacing:.04em">Saw Shop &mdash; True Value Dealer</div><div style="font-size:11px;color:#555;margin-top:4px">'+locAddr+'</div></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888">Work Order</div><div style="font-size:20px;font-weight:800;color:#1a1a1a">#'+o.woNum+'</div>'+(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')+(o.dateOut?'<div style="font-size:11px;color:#555">Completed: '+o.dateOut+'</div>':'')+'<div style="font-size:11px;color:#555">Tech: '+(o.tech||'—')+'</div>'+(bill?'<div style="font-size:11px;color:#555">Labor: '+bill.toFixed(2)+' hrs</div>':'')+'<div style="margin-top:4px"><span style="display:inline-block;padding:3px 10px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;background:#e8e8e8;color:#444">'+o.status+'</span></div></div></div>'
   +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px"><div style="background:#f6f4f1;border-radius:3px;padding:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:6px">Customer</div><div style="font-size:15px;font-weight:700">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:12px;color:#555;margin-top:2px">'+c.phone+'</div>':'')+(c.email?'<div style="font-size:12px;color:#555">'+c.email+'</div>':'')+(c.addr?'<div style="font-size:12px;color:#555">'+c.addr+'</div>':'')+'</div><div style="background:#f6f4f1;border-radius:3px;padding:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:6px">Equipment</div>'+[['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="display:flex;gap:8px;font-size:12px;margin-bottom:2px"><span style="color:#888;min-width:72px">'+f[0]+'</span><span style="font-weight:600">'+f[1]+'</span></div>';}).join('')+'</div></div>'
@@ -1506,12 +1532,17 @@ function renderPickup(){
     row.onclick=function(){openDet(o.id);};
     var info=document.createElement('div');
     info.style.flex='1';
+    var lastLog=(CONTACTLOGS[o.id]||[])[0];
+    var lastContactLine=lastLog
+      ?'<div style="font-size:11px;color:var(--muted)">Last contact: '+lastLog.dt+' &middot; '+lastLog.type+'</div>'
+      :'<div style="font-size:11px;color:var(--red);font-weight:600">No contact logged</div>';
     info.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +'<span style="font-weight:700;font-size:15px">'+(c.first||'')+' '+(c.last||'')+'</span>'
       +(c.phone?'<a href="tel:'+c.phone+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:14px;text-decoration:none">📞 '+c.phone+'</a>':'')
       +'</div>'
       +'<div style="font-size:12px;color:var(--gray2);margin-top:3px">#'+o.woNum+' &middot; '+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
-      +(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'');
+      +(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')
+      +lastContactLine;
     var meta=document.createElement('div');
     meta.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0';
     meta.innerHTML='<span class="badge '+(o.status==='Ready'?'b-ready':'b-complete')+'">'+o.status+'</span>'
@@ -1603,102 +1634,6 @@ function renderDaily(){
     return row;
   });
 }
-function custSearch(){
-  var q=(document.getElementById('m-cust-search').value||'').toLowerCase().trim();
-  var res=document.getElementById('m-cust-results');
-  if(!q){res.style.display='none';return;}
-  var isPhone=/^[\d\s\-\(\)]+$/.test(q)&&q.replace(/\D/g,'').length>=3;
-  var matches=custArr().filter(function(c){
-    if(isPhone){return (c.phone||'').replace(/\D/g,'').indexOf(q.replace(/\D/g,''))>=0;}
-    var fn=(c.first||'').toLowerCase(),ln=(c.last||'').toLowerCase();
-    var parts=q.split(/\s+/);
-    if(parts.length>=2)return(fn.indexOf(parts[0])>=0&&ln.indexOf(parts[1])>=0)||(fn.indexOf(parts[1])>=0&&ln.indexOf(parts[0])>=0);
-    return fn.indexOf(q)>=0||ln.indexOf(q)>=0||(c.phone||'').indexOf(q)>=0;
-  }).slice(0,8);
-  if(!matches.length){res.innerHTML='<div style="padding:8px 10px;color:var(--muted);font-style:italic">No customers found</div>';res.style.display='block';return;}
-  res.innerHTML='';
-  matches.forEach(function(c){
-    var div=document.createElement('div');
-    div.style.cssText='padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--off)';
-    div.innerHTML='<strong>'+c.first+' '+c.last+'</strong>'+(c.phone?' <span style="color:var(--muted);font-size:12px">'+c.phone+'</span>':'');
-    div.onmouseover=function(){this.style.background='var(--off)';};
-    div.onmouseout=function(){this.style.background='';};
-    div.onclick=function(){custSelect(c.id);};
-    res.appendChild(div);
-  });
-  res.style.display='block';
-}
-function custSelect(cid){
-  var c=CUSTS[cid];if(!c)return;
-  document.getElementById('m-cust').value=cid;
-  document.getElementById('m-cust-search').value='';
-  document.getElementById('m-cust-results').style.display='none';
-  document.getElementById('m-cust-selected-label').textContent=c.first+' '+c.last+(c.phone?' — '+c.phone:'');
-  document.getElementById('m-cust-selected').style.display='flex';
-}
-function custClear(){
-  document.getElementById('m-cust').value='';
-  document.getElementById('m-cust-search').value='';
-  document.getElementById('m-cust-results').style.display='none';
-  document.getElementById('m-cust-selected').style.display='none';
-  document.getElementById('m-cust-selected-label').textContent='';
-}
-function setCustById(cid){
-  if(!cid){custClear();return;}
-  // Wait for CUSTS to be populated if needed
-  if(CUSTS[cid]){custSelect(cid);}
-  else{setTimeout(function(){if(CUSTS[cid])custSelect(cid);},500);}
-}
-
-var ADMIN_CODE = '8704495234';
-var _pendingDelete = null;
-
-function requireAdminDelete(msg, fn){
-  _pendingDelete = fn;
-  document.getElementById('del-modal-msg').textContent = msg;
-  document.getElementById('del-code-input').value = '';
-  document.getElementById('del-code-msg').style.display = 'none';
-  document.getElementById('del-modal').classList.add('open');
-  setTimeout(function(){var el=document.getElementById('del-code-input');if(el)el.focus();},150);
-}
-function confirmDelete(){
-  var val = document.getElementById('del-code-input').value;
-  if(val !== ADMIN_CODE){
-    var msg = document.getElementById('del-code-msg');
-    msg.style.display = 'block';
-    document.getElementById('del-code-input').value = '';
-    setTimeout(function(){msg.style.display='none';}, 2000);
-    return;
-  }
-  closeM('del-modal');
-  if(_pendingDelete){ _pendingDelete(); _pendingDelete = null; }
-}
-
-var _adminUnlocked = false;
-
-function checkAdminCode(){
-  var val = document.getElementById('admin-code-input').value;
-  var msg = document.getElementById('admin-code-msg');
-  if(val === ADMIN_CODE){
-    _adminUnlocked = true;
-    document.getElementById('admin-locked').style.display = 'none';
-    document.getElementById('admin-unlocked').style.display = 'block';
-    document.getElementById('admin-code-input').value = '';
-    msg.style.display = 'none';
-    renderTechs();
-  } else {
-    msg.style.display = 'block';
-    document.getElementById('admin-code-input').value = '';
-    setTimeout(function(){msg.style.display='none';}, 2000);
-  }
-}
-function lockAdmin(){
-  _adminUnlocked = false;
-  document.getElementById('admin-locked').style.display = 'block';
-  document.getElementById('admin-unlocked').style.display = 'none';
-}
-
-document.querySelectorAll('.modal-bg').forEach(function(el){el.addEventListener('click',function(e){if(e.target===el)el.classList.remove('open');});});
 initFB();
 </script>
 </body>
