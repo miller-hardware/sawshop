@@ -1157,7 +1157,7 @@ function openDet(id){
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
     +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
     +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
-    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button><button class="btn amber" style="padding:6px 12px;font-size:15px" onclick="openPartOrder(\'stihl\',\''+id+'\')">+ Stihl Part</button><button class="btn amber" style="padding:6px 12px;font-size:15px" onclick="openPartOrder(\'other\',\''+id+'\')">+ Other Part</button><button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
+    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn amber" style="padding:6px 12px;font-size:15px" onclick="openPartOrder(\'stihl\',\''+id+'\')">+ Stihl Part</button><button class="btn amber" style="padding:6px 12px;font-size:15px" onclick="openPartOrder(\'other\',\''+id+'\')">+ Other Part</button><button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
 
@@ -1543,6 +1543,14 @@ function renderPickup(){
       +'<div style="font-size:12px;color:var(--gray2);margin-top:3px">#'+o.woNum+' &middot; '+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
       +(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')
       +lastContactLine;
+    if(c.phone){
+      var textBtn=document.createElement('button');
+      textBtn.className='btn sm success';
+      textBtn.textContent='📱 Text Customer';
+      textBtn.style.marginTop='6px';
+      textBtn.onclick=function(e){e.stopPropagation();textCustomer(o.id);};
+      info.appendChild(textBtn);
+    }
     var meta=document.createElement('div');
     meta.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0';
     meta.innerHTML='<span class="badge '+(o.status==='Ready'?'b-ready':'b-complete')+'">'+o.status+'</span>'
@@ -1584,7 +1592,7 @@ function renderDaily(){
     var row=document.createElement('div');
     row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--off)';
     row.innerHTML='<div style="cursor:pointer"><strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')+'</div>'
-      +(c.phone?'<a href="tel:'+c.phone+'" style="color:var(--red);font-weight:700;font-size:13px;text-decoration:none">📞 '+c.phone+'</a>':'');
+      +(c.phone?'<div style="display:flex;gap:8px;align-items:center"><a href="tel:'+c.phone+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:13px;text-decoration:none">📞 '+c.phone+'</a><a href="#" onclick="event.preventDefault();event.stopPropagation();textCustomer(\''+o.id+'\')" style="color:#2d7d1e;font-weight:700;font-size:13px;text-decoration:none">📱 Text</a></div>':'');
     row.querySelector('div').onclick=function(){openDet(o.id);};
     return row;
   });
@@ -1633,6 +1641,18 @@ function renderDaily(){
     row.onclick=function(){openDet(o.id);};
     return row;
   });
+}
+function textCustomer(id){
+  var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
+  if(!c.phone){alert('No phone number on file for this customer.');return;}
+  var phone=(c.phone||'').replace(/\D/g,'');
+  var shopPhone=o.location==='Harrison'?'(870) 741-3493':'(870) 449-4255';
+  var msg=o.status==='Ready'
+    ?'Hi '+(c.first||'there')+', your '+(o.brand?o.brand+' ':'')+o.equipType+' is ready for pickup at Miller Hardware! Give us a call at '+shopPhone+' if you have any questions.'
+    :'Hi '+(c.first||'there')+', this is Miller Hardware reaching out about your '+(o.brand?o.brand+' ':'')+o.equipType+'. Give us a call at '+shopPhone+'.';
+  var a=document.createElement('a');
+  a.href='sms:'+phone+'?body='+encodeURIComponent(msg);
+  a.click();
 }
 initFB();
 </script>
