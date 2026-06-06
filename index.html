@@ -1246,7 +1246,7 @@ function printWO(id){
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+p.qty+'</td>'
       +'</tr>';
   }).join('');
-  var blanks=Math.max(0,3-existParts);var blankPRows='';
+  var blanks=Math.max(0,5-existParts);var blankPRows='';
   for(var bi=0;bi<blanks;bi++){blankPRows+='<tr><td style="padding:5px 7px;border:1px solid #ccc;height:24px"></td><td style="padding:5px 7px;border:1px solid #ccc"></td><td style="padding:5px 7px;border:1px solid #ccc"></td></tr>';}
   // ── PAGE 1: COUNTER COPY ─────────────────────────────────────────────────
   var page1=''
@@ -1268,7 +1268,7 @@ function printWO(id){
     +'<div>'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Customer</div>'
     +'<div style="font-size:24px;font-weight:800;line-height:1.1">'+custName+'</div>'
-    +(c.phone?'<div style="font-size:15px;color:#444;margin-top:5px">'+c.phone+'</div>':'')
+    +(c.phone?'<div style="font-size:21px;font-weight:800;color:#1a1a1a;margin-top:5px">'+c.phone+'</div>':'')
     +(c.addr?'<div style="font-size:12px;color:#777;margin-top:3px">'+c.addr+'</div>':'')
     +'</div>'
     +'<div>'
@@ -1316,7 +1316,7 @@ function printWO(id){
     +'<div style="border:1px solid #888;padding:6px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">Customer</div>'
     +'<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+custName+'</div>'
-    +(c.phone?'<div style="font-size:11px;margin-bottom:1px"><strong>Ph:</strong> '+c.phone+'</div>':'')
+    +(c.phone?'<div style="font-size:15px;font-weight:800;margin-bottom:2px">Ph: '+c.phone+'</div>':'')
     +(c.email?'<div style="font-size:11px;margin-bottom:1px"><strong>Email:</strong> '+c.email+'</div>':'')
     +(c.addr?'<div style="font-size:11px"><strong>Address:</strong> '+c.addr+'</div>':'')
     +'</div>'
@@ -1342,7 +1342,7 @@ function printWO(id){
     +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Diagnosis &amp; Work Performed</div>'
     +(o.notes?'<div style="font-size:10px;padding:3px 5px;background:#f6f4f1;margin-bottom:5px"><strong>Notes:</strong> '+o.notes+'</div>':'')
-    +lines(5)
+    +lines(8)
     +'</div>'
     +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Parts / Materials Used</div>'
