@@ -249,7 +249,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 .daily-hdr{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1.5px solid var(--silver);display:flex;justify-content:space-between;align-items:center}
 .cust-alert{background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:6px 10px;font-size:12px;color:#633806;margin-bottom:10px;display:flex;align-items:center;gap:7px}
 
-@page{size:letter;margin:0.4in 0.45in}@media print{body *{visibility:hidden}#print-area,#print-area *{visibility:visible}#print-area{position:absolute;left:0;top:0;width:100%;background:#fff}}
+@page{size:letter;margin:0.4in 0.45in}@media print{.app{height:0!important;overflow:hidden!important;min-height:0!important}body *{visibility:hidden}#print-area,#print-area *{visibility:visible}#print-area{position:absolute;left:0;top:0;width:100%;background:#fff}}
 </style>
 
 <h2 class="sr-only">Miller Hardware Saw Shop — work order system v8</h2>
@@ -1237,19 +1237,17 @@ function printWO(id){
   var custName=((c.first||'')+' '+(c.last||'')).trim();
   var equipLine=[o.brand,o.equipType].filter(Boolean).join(' ');
   var bill=parseFloat(o.billHrs)||0;
-  var lines=function(n){var s='';for(var i=0;i<n;i++){s+='<div style="border-bottom:1px solid #aaa;height:26px;margin-bottom:3px"></div>';}return s;};
+  var lines=function(n){var s='';for(var i=0;i<n;i++){s+='<div style="border-bottom:1px solid #aaa;height:22px;margin-bottom:3px"></div>';}return s;};
   var existParts=(o.parts||[]).length;
   var prows=(o.parts||[]).map(function(p){
     return '<tr>'
       +'<td style="padding:5px 7px;border:1px solid #ccc">'+p.desc+(p.note?' <span style="color:#888;font-size:10px">('+p.note+')</span>':'')+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center"></td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+p.qty+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc"></td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc"></td>'
       +'</tr>';
   }).join('');
-  var blanks=Math.max(0,5-existParts);var blankPRows='';
-  for(var bi=0;bi<blanks;bi++){blankPRows+='<tr><td style="padding:5px 7px;border:1px solid #ccc;height:26px"></td><td style="padding:5px 7px;border:1px solid #ccc"></td><td style="padding:5px 7px;border:1px solid #ccc"></td><td style="padding:5px 7px;border:1px solid #ccc"></td><td style="padding:5px 7px;border:1px solid #ccc"></td></tr>';}
+  var blanks=Math.max(0,3-existParts);var blankPRows='';
+  for(var bi=0;bi<blanks;bi++){blankPRows+='<tr><td style="padding:5px 7px;border:1px solid #ccc;height:24px"></td><td style="padding:5px 7px;border:1px solid #ccc"></td><td style="padding:5px 7px;border:1px solid #ccc"></td></tr>';}
   // ── PAGE 1: COUNTER COPY ─────────────────────────────────────────────────
   var page1=''
     +'<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:18px 22px;color:#1a1a1a">'
@@ -1299,107 +1297,76 @@ function printWO(id){
     +'</div>';
   // ── PAGE 2: TECH WORK ORDER ───────────────────────────────────────────────
   var page2=''
-    +'<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:18px 22px;color:#1a1a1a;page-break-before:always">'
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a1a1a;padding-bottom:10px;margin-bottom:10px">'
+    +'<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:10px 14px;color:#1a1a1a;page-break-before:always">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a1a1a;padding-bottom:8px;margin-bottom:8px">'
     +'<div>'
-    +'<div style="font-size:20px;font-weight:800;letter-spacing:.01em">MILLER HARDWARE CO.</div>'
-    +'<div style="font-size:11px;color:#555;margin-top:2px">Saw Shop &mdash; True Value Dealer</div>'
-    +'<div style="font-size:11px;color:#555;margin-top:2px">'+locAddr+'</div>'
+    +'<div style="font-size:19px;font-weight:800;letter-spacing:.01em">MILLER HARDWARE CO.</div>'
+    +'<div style="font-size:11px;color:#555;margin-top:1px">Saw Shop &mdash; True Value Dealer</div>'
+    +'<div style="font-size:11px;color:#555;margin-top:1px">'+locAddr+'</div>'
     +'</div>'
     +'<div style="text-align:right">'
-    +'<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555">Service Work Order</div>'
-    +'<div style="font-size:30px;font-weight:800;line-height:1">#'+o.woNum+'</div>'
-    +(o.tag?'<div style="font-size:13px;font-weight:700">Tag # '+o.tag+'</div>':'')
+    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555">Service Work Order</div>'
+    +'<div style="font-size:28px;font-weight:800;line-height:1">#'+o.woNum+'</div>'
+    +(o.tag?'<div style="font-size:12px;font-weight:700">Tag # '+o.tag+'</div>':'')
     +(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')
     +(o.estDate?'<div style="font-size:11px;color:#555">Est. Done: '+o.estDate+'</div>':'')
     +'</div>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:7px">'
-    +'<div style="border:1px solid #888;padding:8px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:5px">Customer</div>'
-    +'<div style="font-size:14px;font-weight:700;margin-bottom:3px">'+custName+'</div>'
-    +(c.phone?'<div style="font-size:12px;margin-bottom:2px"><strong>Ph:</strong> '+c.phone+'</div>':'')
-    +(c.email?'<div style="font-size:12px;margin-bottom:2px"><strong>Email:</strong> '+c.email+'</div>':'')
-    +(c.addr?'<div style="font-size:12px"><strong>Address:</strong> '+c.addr+'</div>':'')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:5px">'
+    +'<div style="border:1px solid #888;padding:6px">'
+    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">Customer</div>'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+custName+'</div>'
+    +(c.phone?'<div style="font-size:11px;margin-bottom:1px"><strong>Ph:</strong> '+c.phone+'</div>':'')
+    +(c.email?'<div style="font-size:11px;margin-bottom:1px"><strong>Email:</strong> '+c.email+'</div>':'')
+    +(c.addr?'<div style="font-size:11px"><strong>Address:</strong> '+c.addr+'</div>':'')
     +'</div>'
-    +'<div style="border:1px solid #888;padding:8px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:5px">Equipment</div>'
-    +([['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:12px;margin-bottom:2px"><strong>'+f[0]+':</strong> '+f[1]+'</div>';}).join(''))
-    +'<div style="font-size:12px;margin-top:4px"><strong>Tech:</strong> '+(o.tech||'________________')+'</div>'
+    +'<div style="border:1px solid #888;padding:6px">'
+    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">Equipment</div>'
+    +([['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:11px;margin-bottom:1px"><strong>'+f[0]+':</strong> '+f[1]+'</div>';}).join(''))
+    +'<div style="font-size:11px;margin-top:2px"><strong>Tech:</strong> '+(o.tech||'________________')+'</div>'
     +'</div>'
     +'</div>'
-    +'<div style="border:1px solid #888;padding:8px;margin-bottom:6px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:6px">Customer Complaint / Reason for Service</div>'
-    +(o.complaint?'<div style="font-size:12px;margin-bottom:6px;padding:4px 6px;background:#f6f4f1">'+o.complaint+'</div>':'')
-    +lines(2)
+    +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
+    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Customer Complaint / Reason for Service</div>'
+    +(o.complaint?'<div style="font-size:11px;margin-bottom:5px;padding:3px 5px;background:#f6f4f1">'+o.complaint+'</div>':'')
+    +lines(1)
     +'</div>'
-    +'<div style="border:1.5px solid #1a1a1a;padding:8px;margin-bottom:6px;display:flex;gap:14px">'
-    +'<div style="flex:1;font-size:10px;color:#333;line-height:1.55">I hereby authorize the above repair work to be done along with the necessary materials. I understand that you will not be held responsible for loss or damage to articles left in the equipment. I hereby grant permission to operate the above equipment for testing and inspection purposes.<br><br><strong>Repairs not to exceed: $__________</strong></div>'
-    +'<div style="width:200px;border-left:1px solid #ccc;padding-left:14px;display:flex;flex-direction:column;justify-content:flex-end">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:24px">Customer Signature</div>'
-    +'<div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:4px"></div>'
+    +'<div style="border:1.5px solid #1a1a1a;padding:6px;margin-bottom:5px;display:flex;gap:12px">'
+    +'<div style="flex:1;font-size:9px;color:#333;line-height:1.5">I hereby authorize the above repair work to be done along with the necessary materials. I understand that you will not be held responsible for loss or damage to articles left in the equipment. I hereby grant permission to operate the above equipment for testing and inspection purposes.<br><strong>Repairs not to exceed: $__________</strong></div>'
+    +'<div style="width:185px;border-left:1px solid #ccc;padding-left:12px;display:flex;flex-direction:column;justify-content:flex-end">'
+    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:20px">Customer Signature</div>'
+    +'<div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:3px"></div>'
     +'<div style="font-size:9px;color:#888">Signature &amp; Date</div>'
     +'</div>'
     +'</div>'
-    +'<div style="border:1px solid #888;padding:8px;margin-bottom:6px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:6px">Diagnosis &amp; Work Performed</div>'
-    +(o.notes?'<div style="font-size:11px;padding:4px 6px;background:#f6f4f1;margin-bottom:6px"><strong>Notes:</strong> '+o.notes+'</div>':'')
-    +lines(8)
+    +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
+    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Diagnosis &amp; Work Performed</div>'
+    +(o.notes?'<div style="font-size:10px;padding:3px 5px;background:#f6f4f1;margin-bottom:5px"><strong>Notes:</strong> '+o.notes+'</div>':'')
+    +lines(5)
     +'</div>'
-    +'<div style="border:1px solid #888;padding:8px;margin-bottom:6px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:6px">Parts Used</div>'
+    +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
+    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Parts / Materials Used</div>'
     +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
     +'<thead><tr style="background:#1a1a1a;color:#fff">'
-    +'<th style="padding:5px 7px;text-align:left;font-size:9px;letter-spacing:.05em;text-transform:uppercase">Description</th>'
-    +'<th style="padding:5px 7px;text-align:center;font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:80px">Part #</th>'
-    +'<th style="padding:5px 7px;text-align:center;font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:50px">Qty</th>'
-    +'<th style="padding:5px 7px;text-align:right;font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:80px">Unit Price</th>'
-    +'<th style="padding:5px 7px;text-align:right;font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:80px">Total</th>'
+    +'<th style="padding:4px 7px;text-align:left;font-size:9px;letter-spacing:.05em;text-transform:uppercase">Description</th>'
+    +'<th style="padding:4px 7px;text-align:center;font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:100px">Part #</th>'
+    +'<th style="padding:4px 7px;text-align:center;font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:55px">Qty</th>'
     +'</tr></thead>'
     +'<tbody>'+prows+blankPRows+'</tbody>'
-    +'<tfoot><tr><td colspan="4" style="padding:5px 7px;text-align:right;font-weight:700;font-size:10px;border-top:1.5px solid #888">Parts Subtotal:</td><td style="padding:5px 7px;border-top:1.5px solid #888;border-left:1px solid #ccc"></td></tr></tfoot>'
     +'</table>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:3fr 2fr;gap:8px;margin-bottom:7px">'
-    +'<div style="border:1px solid #888;padding:8px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:6px">Labor</div>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
-    +'<thead><tr>'
-    +'<th style="text-align:left;padding:4px 6px;font-size:9px;font-weight:700;text-transform:uppercase;color:#888;border-bottom:1px solid #ccc">Description</th>'
-    +'<th style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;text-transform:uppercase;color:#888;border-bottom:1px solid #ccc;width:55px">Hours</th>'
-    +'<th style="text-align:right;padding:4px 6px;font-size:9px;font-weight:700;text-transform:uppercase;color:#888;border-bottom:1px solid #ccc;width:70px">Amount</th>'
-    +'</tr></thead>'
-    +'<tbody>'
-    +(bill?'<tr><td style="padding:5px 6px;border-bottom:1px solid #eee">Shop Labor</td><td style="padding:5px 6px;border-bottom:1px solid #eee;text-align:center">'+bill.toFixed(1)+'</td><td style="padding:5px 6px;border-bottom:1px solid #eee"></td></tr>':'')
-    +'<tr><td style="padding:5px 6px;border-bottom:1px solid #eee;height:24px"></td><td style="border-bottom:1px solid #eee"></td><td style="border-bottom:1px solid #eee"></td></tr>'
-    +'<tr><td style="padding:5px 6px;height:24px"></td><td></td><td></td></tr>'
-    +'<tr><td colspan="2" style="padding:5px 7px;text-align:right;font-weight:700;font-size:10px;border-top:1.5px solid #888">Labor Subtotal:</td><td style="padding:5px 7px;border-top:1.5px solid #888"></td></tr>'
-    +'</tbody></table>'
-    +'</div>'
-    +'<div style="border:1px solid #888;padding:8px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:8px">Summary</div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 4px;border-bottom:1px solid #eee"><span>Parts:</span><span>$</span></div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 4px;border-bottom:1px solid #eee"><span>Labor:</span><span>$</span></div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 4px;border-bottom:1px solid #eee"><span>Tax (9.75%):</span><span>$</span></div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:800;padding:8px 4px 4px"><span>TOTAL DUE:</span><span>$</span></div>'
-    +'<div style="margin-top:10px;border-top:1px solid #ccc;padding-top:8px">'
-    +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:3px">Deposit</div>'
-    +'<div style="font-size:13px;font-weight:700">'+(o.deposit?'&#10003; Paid':'$___________')+'</div>'
-    +'</div>'
-    +'</div>'
-    +'</div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:16px;font-size:11px;padding:7px 10px;border:1px solid #ccc;margin-bottom:8px">'
+    +'<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:11px;padding:5px 8px;border:1px solid #ccc;margin-bottom:7px">'
     +'<span>&#9744; Return old parts to customer</span>'
     +'<span>&#9744; Warranty repair</span>'
     +'<span>&#9744; Seasonal service</span>'
     +'<span>&#9744; Estimate only &mdash; awaiting approval</span>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;border-top:2px solid #1a1a1a;padding-top:10px">'
-    +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:22px">Technician</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:9px;color:#888">Signature &amp; Date</div></div>'
-    +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:22px">Approved By</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:9px;color:#888">Supervisor / Manager</div></div>'
-    +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:22px">Customer Pickup</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:4px"></div><div style="font-size:9px;color:#888">Signature &amp; Date</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;border-top:2px solid #1a1a1a;padding-top:8px">'
+    +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:18px">Technician</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:3px"></div><div style="font-size:9px;color:#888">Signature &amp; Date</div></div>'
+    +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:18px">Approved By</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:3px"></div><div style="font-size:9px;color:#888">Supervisor / Manager</div></div>'
+    +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:18px">Customer Pickup</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:3px"></div><div style="font-size:9px;color:#888">Signature &amp; Date</div></div>'
     +'</div>'
-    +'<div style="text-align:center;margin-top:10px;padding-top:8px;border-top:1px solid #ccc;font-size:10px;color:#888">Miller Hardware Company &mdash; Serving Arkansas Since 1931 &bull; Harrison: (870) 741-3493 &bull; Yellville: (870) 449-4255</div>'
+    +'<div style="text-align:center;margin-top:7px;padding-top:6px;border-top:1px solid #ccc;font-size:10px;color:#888">Miller Hardware Company &mdash; Serving Arkansas Since 1931 &bull; Harrison: (870) 741-3493 &bull; Yellville: (870) 449-4255</div>'
     +'</div>';
   var html=page1+page2;
   var pa=document.getElementById('print-area');pa.innerHTML=html;pa.style.display='block';
