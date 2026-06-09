@@ -275,6 +275,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="tab" onclick="showTab('customers')">Customers</div>
       <div class="tab" onclick="showTab('pickup')">📞 Pickup Calls</div>
       <div class="tab" onclick="showTab('daily')">Morning Report</div>
+      <div class="tab" onclick="showTab('parts')">🔧 Parts to Order</div>
       <div class="tab" onclick="showTab('settings')">Settings</div>
     </div>
     <button class="btn primary" onclick="openNewWO()">+ New Work Order</button>
@@ -298,22 +299,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     </div>
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Active Orders</div>
     <div id="dash-list"><div class="empty">Loading...</div></div>
-    <div class="po-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px">
-      <div class="card">
-        <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-          Stihl Parts to Order
-          <button class="btn sm primary" onclick="openPartOrder('stihl')">+ Add</button>
-        </div>
-        <div id="po-stihl-list"><div class="empty" style="padding:10px 0">None pending</div></div>
-      </div>
-      <div class="card">
-        <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-          Other Parts to Order
-          <button class="btn sm primary" onclick="openPartOrder('other')">+ Add</button>
-        </div>
-        <div id="po-other-list"><div class="empty" style="padding:10px 0">None pending</div></div>
-      </div>
-    </div>
   </div>
 
   <div class="view" id="tab-board">
@@ -388,6 +373,26 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 
   <div class="view" id="tab-daily">
     <div id="daily-report"><div class="empty">Loading...</div></div>
+  </div>
+
+  <div class="view" id="tab-parts">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Parts to Order &mdash; standalone shopping list</div>
+    <div class="po-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card">
+        <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+          Stihl Parts to Order
+          <button class="btn sm primary" onclick="openPartOrder('stihl')">+ Add</button>
+        </div>
+        <div id="po-stihl-list"><div class="empty" style="padding:10px 0">None pending</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
+          Other Parts to Order
+          <button class="btn sm primary" onclick="openPartOrder('other')">+ Add</button>
+        </div>
+        <div id="po-other-list"><div class="empty" style="padding:10px 0">None pending</div></div>
+      </div>
+    </div>
   </div>
 
   <div class="view" id="tab-settings">
@@ -690,19 +695,8 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 <div class="modal">
   <div class="modal-title" id="po-mtitle">Add Part to Order</div>
   <div class="f"><label>Part # / Description</label><input type="text" id="po-desc" placeholder="e.g. 1141 120 1603, Carburetor kit"></div>
-  <div class="g2">
-    <div class="f"><label>Qty</label><input type="number" id="po-qty" value="1" min="1"></div>
-    <div class="f"><label>Linked Work Order</label>
-      <input type="text" id="po-wo-search" placeholder="Search by name, phone, or WO#..." oninput="poWOSearch()" autocomplete="off" style="margin-bottom:4px">
-      <div id="po-wo-results" style="display:none;border:1.5px solid var(--silver);border-radius:3px;background:var(--white);max-height:160px;overflow-y:auto;font-size:13px"></div>
-      <input type="hidden" id="po-woid">
-      <div id="po-wo-selected" style="display:none;font-size:12px;color:var(--gray2);padding:4px 0;display:flex;align-items:center;gap:6px">
-        <span id="po-wo-selected-label"></span>
-        <button type="button" onclick="poClearWO()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;font-weight:700;padding:0 2px">&#x2715;</button>
-      </div>
-    </div>
-  </div>
-  <div class="f"><label>For Equipment</label><input type="text" id="po-equip" placeholder="Auto-fills from WO, or type manually"></div>
+  <div class="f"><label>Qty</label><input type="number" id="po-qty" value="1" min="1" style="max-width:140px"></div>
+  <div class="f"><label>For Equipment</label><input type="text" id="po-equip" placeholder="e.g. Stihl MS 271 (optional)"></div>
   <div class="f"><label>Notes</label><input type="text" id="po-notes" placeholder="e.g. Customer approved, ordered 4/10"></div>
   <label style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px">
     <input type="checkbox" id="po-paid" style="width:16px;height:16px;accent-color:var(--red)"> Parts Paid For
@@ -955,12 +949,13 @@ function custEquip(cid){return EQUIPMENT[cid]||[];}
 function refreshAll(){renderDash();renderBoard();renderOrders();renderHours();renderReminders();renderCustomers();renderPartOrders();renderPickup();renderDaily();}
 
 function showTab(t){
-  var tabs=['dash','board','orders','hours','reminders','customers','pickup','daily','settings'];
+  var tabs=['dash','board','orders','hours','reminders','customers','pickup','daily','parts','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='pickup')renderPickup();
   if(t==='daily')renderDaily();
+  if(t==='parts')renderPartOrders();
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1168,7 +1163,7 @@ function openDet(id){
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
     +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
     +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
-    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn amber" style="padding:6px 12px;font-size:15px" onclick="openPartOrder(\'stihl\',\''+id+'\')">+ Stihl Part</button><button class="btn amber" style="padding:6px 12px;font-size:15px" onclick="openPartOrder(\'other\',\''+id+'\')">+ Other Part</button><button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
+    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
 
@@ -1516,74 +1511,20 @@ function deletePart(woid,idx){
   o.parts=parts;writeOrder(o);openDet(woid);
 }
 var _poCategory=null;
-function openPartOrder(cat,preWoid){
+function openPartOrder(cat){
   _poCategory=cat;
   document.getElementById('po-mtitle').textContent='Add to '+(cat==='stihl'?'Stihl':'Other')+' Parts List';
   ['po-desc','po-equip','po-notes'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('po-qty').value='1';document.getElementById('po-paid').checked=false;
-  // Reset WO search
-  document.getElementById('po-wo-search').value='';
-  document.getElementById('po-wo-results').style.display='none';
-  document.getElementById('po-woid').value='';
-  document.getElementById('po-wo-selected').style.display='none';
-  document.getElementById('po-wo-selected-label').textContent='';
-  if(preWoid){poSelectWO(preWoid);}
   document.getElementById('part-order-modal').classList.add('open');
-}
-function poWOSearch(){
-  var q=(document.getElementById('po-wo-search').value||'').toLowerCase().trim();
-  var res=document.getElementById('po-wo-results');
-  if(!q){res.style.display='none';return;}
-  var matches=orderArr().filter(function(o){
-    if(o.status==='Picked Up')return false;
-    var c=CUSTS[o.custId]||{};
-    var txt=((c.first||'')+' '+(c.last||'')+' '+(c.phone||'')+' '+o.woNum).toLowerCase();
-    return txt.indexOf(q)>=0;
-  }).slice(0,8);
-  if(!matches.length){res.innerHTML='<div style="padding:8px 10px;color:var(--muted);font-style:italic">No open orders found</div>';res.style.display='block';return;}
-  res.innerHTML='';
-  matches.forEach(function(o){
-    var c=CUSTS[o.custId]||{};
-    var div=document.createElement('div');
-    div.style.cssText='padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--off)';
-    div.innerHTML='<strong>#'+o.woNum+'</strong> — '+(c.first||'')+' '+(c.last||'')
-      +(c.phone?' <span style="color:var(--muted)">'+c.phone+'</span>':'')
-      +'<div style="font-size:11px;color:var(--gray2)">'+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>';
-    div.onmouseover=function(){this.style.background='var(--off)';};
-    div.onmouseout=function(){this.style.background='';};
-    div.onclick=function(){poSelectWO(o.id);};
-    res.appendChild(div);
-  });
-  res.style.display='block';
-}
-function poSelectWO(woid){
-  var o=ORDERS[woid];if(!o)return;
-  var c=CUSTS[o.custId]||{};
-  document.getElementById('po-woid').value=woid;
-  document.getElementById('po-wo-search').value='';
-  document.getElementById('po-wo-results').style.display='none';
-  var label='#'+o.woNum+' — '+(c.first||'')+' '+(c.last||'');
-  document.getElementById('po-wo-selected-label').textContent=label;
-  document.getElementById('po-wo-selected').style.display='flex';
-  var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
-  if(equip)document.getElementById('po-equip').value=equip;
-}
-function poClearWO(){
-  document.getElementById('po-woid').value='';
-  document.getElementById('po-wo-search').value='';
-  document.getElementById('po-wo-results').style.display='none';
-  document.getElementById('po-wo-selected').style.display='none';
-  document.getElementById('po-wo-selected-label').textContent='';
 }
 function savePartOrder(){
   var desc=document.getElementById('po-desc').value.trim();
   if(!desc){alert('Enter a part description.');return;}
-  var woid=document.getElementById('po-woid').value;
-  var woNum=woid&&ORDERS[woid]?ORDERS[woid].woNum:null;
   var item={desc:desc,qty:parseInt(document.getElementById('po-qty').value)||1,
     equip:document.getElementById('po-equip').value.trim(),
     notes:document.getElementById('po-notes').value.trim(),
-    woId:woid||null,woNum:woNum||null,
+    woId:null,woNum:null,
     ordered:false,received:false,paid:document.getElementById('po-paid').checked,added:today()};
   if(!PARTORDERS[_poCategory])PARTORDERS[_poCategory]=[];
   PARTORDERS[_poCategory].push(item);
