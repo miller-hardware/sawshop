@@ -1150,7 +1150,12 @@ function openDet(id){
     +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
-    +(o.notes?'<div style="margin-bottom:8px"><div class="df-lbl">Tech Notes</div><div class="df-val">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
+    +'<div class="sect-lbl">Notes</div>'
+    +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-bottom:8px">'
+    +'<div style="flex:1;min-width:160px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Add a Note</div><input type="text" id="ql-gen-note-'+id+'" placeholder="Type a note, then tap Add Note" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
+    +'<button class="btn sm primary" onclick="quickAddNote(\''+id+'\')" style="align-self:flex-end">+ Add Note</button>'
+    +'</div>'
     +hrsHtml+'<hr>'
     +(o.parts&&o.parts.length?'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Description</th><th style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Qty</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Notes</th></tr></thead><tbody>'+prows+'</tbody></table>':'<div style="font-size:12px;color:var(--muted);padding:6px 0;font-style:italic">No parts or labor logged.</div>')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-top:6px">'
@@ -1503,6 +1508,16 @@ function quickAddPart(woid){
   document.getElementById('ql-note-'+woid).value='';
   document.getElementById('ql-qty-'+woid).value='1';
   openDet(woid);
+}
+function quickAddNote(woid){
+  var inp=document.getElementById('ql-gen-note-'+woid);
+  var txt=(inp?inp.value:'').trim();
+  if(!txt){alert('Type a note first.');return;}
+  var o=ORDERS[woid];if(!o)return;
+  var stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  o.notes=o.notes?(o.notes+'\n'+stamp+': '+txt):(stamp+': '+txt);
+  o.notesTs=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  writeOrder(o);openDet(woid);
 }
 function deletePart(woid,idx){
   if(!confirm('Remove this part?'))return;
