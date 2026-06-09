@@ -90,6 +90,8 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 #wo-modal{z-index:210}
 #cust-modal,#eq-modal,#contact-modal{z-index:220}
 .modal{background:var(--white);border-radius:3px;border-top:4px solid var(--red);padding:20px;width:min(97vw,640px);margin:auto}
+/* Work-order form + detail card use horizontal space on laptops/desktops; mobile unaffected (handled by max-width:540px block below) */
+@media(min-width:860px){#wo-modal>.modal,#det-modal>.modal{width:min(95vw,1040px)}}
 .modal-title{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;margin-bottom:16px}
 .mfoot{display:flex;gap:7px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1.5px solid var(--silver);flex-wrap:wrap}
 .sect-lbl{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red);margin:14px 0 8px;padding-bottom:4px;border-bottom:1.5px solid var(--red)}
@@ -526,11 +528,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="f"><label>Date In</label><input type="date" id="m-datein"></div>
   </div>
   <div class="sect-lbl">Work Details</div>
-  <div class="f"><label>Customer Complaint</label><textarea id="m-complaint" placeholder="What is the customer reporting?"></textarea></div>
-  <div class="f">
-    <label>Tech Notes / Diagnosis</label>
-    <textarea id="m-notes" placeholder="Findings, parts needed, internal notes..."></textarea>
-    <div class="note-ts" id="m-notes-ts"></div>
+  <div class="g2">
+    <div class="f"><label>Customer Complaint</label><textarea id="m-complaint" placeholder="What is the customer reporting?"></textarea></div>
+    <div class="f">
+      <label>Tech Notes / Diagnosis</label>
+      <textarea id="m-notes" placeholder="Findings, parts needed, internal notes..."></textarea>
+      <div class="note-ts" id="m-notes-ts"></div>
+    </div>
   </div>
   <div id="waiting-parts-row" style="display:none;margin-bottom:10px">
     <div class="f"><label>Parts Being Waited On</label><input type="text" id="m-parts-waiting" placeholder="e.g. Carburetor kit — ordered from Stihl 4/8"></div>
