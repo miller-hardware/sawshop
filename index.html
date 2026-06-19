@@ -141,23 +141,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 .board-card .bc-cust{font-size:15px;font-weight:700;margin:1px 0}
 .board-card .bc-equip{font-size:12px;color:var(--gray2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .board-card .bc-meta{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;align-items:center}
-.board-card .bc-hours{font-size:11px;color:var(--muted);margin-top:3px}
 .board-empty{font-size:13px;color:var(--muted);font-style:italic;text-align:center;padding:16px 0}
-.hours-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px}
-.hours-stat{background:var(--white);border:1.5px solid var(--silver);border-radius:3px;padding:10px 12px;border-top:3px solid var(--dark)}
-.hours-stat.good{border-top-color:#2d7d1e}
-.hours-stat.over{border-top-color:var(--red)}
-.hours-stat .lbl{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:3px}
-.hours-stat .val{font-size:22px;font-weight:800}
-.hours-table{width:100%;border-collapse:collapse;font-size:13px}
-.hours-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:5px 8px;border-bottom:1.5px solid var(--silver);background:var(--off)}
-.hours-table td{padding:6px 8px;border-bottom:1px solid var(--off)}
-.hours-table tr:hover td{background:var(--off);cursor:pointer}
-.over-est{color:var(--red);font-weight:700}
-.under-est{color:#2d7d1e;font-weight:700}
-.hrs-bar-wrap{background:var(--silver);border-radius:2px;height:6px;width:80px;display:inline-block;vertical-align:middle;margin-left:4px}
-.hrs-bar{height:6px;border-radius:2px;background:#2d7d1e}
-.hrs-bar.over{background:var(--red)}
 
 /* REMINDERS */
 .reminder-row{display:flex;align-items:flex-start;gap:12px;padding:15px 18px;border:1.5px solid var(--silver);border-radius:3px;margin-bottom:8px;background:var(--white)}
@@ -206,8 +190,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   .modal-bg.open{display:flex;flex-direction:column}
   .det-modal-inner{border-radius:0;width:100vw}
   .mfoot{position:sticky;bottom:0;background:var(--white);padding:10px 14px;margin:0 -14px -14px;border-top:1.5px solid var(--silver)}
-  .hours-table{font-size:11px}
-  .hours-table th,.hours-table td{padding:4px 5px}
   .board-col{width:180px}
   .srow{gap:5px}
   .srow input,.srow select{font-size:14px;padding:6px 8px}
@@ -270,7 +252,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="tab active" onclick="showTab('dash')">Dashboard</div>
       <div class="tab" onclick="showTab('board')">Shop Load</div>
       <div class="tab" onclick="showTab('customers')">Customers</div>
-      <div class="tab" onclick="showTab('hours')">Hours</div>
       <div class="tab" onclick="showTab('reminders')">Reminders <span class="tab-badge" id="reminder-badge" style="display:none">0</span></div>
       <div class="tab" onclick="showTab('pickup')">📞 Pickup Calls</div>
       <div class="tab" onclick="showTab('daily')">Morning Report</div>
@@ -302,7 +283,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
 
   <div class="view" id="tab-board">
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs or 16+ estimated hours.</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs.</div>
     <div class="board-wrap"><div class="board" id="board-inner"></div></div>
   </div>
 
@@ -324,18 +305,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div id="wo-list"><div class="empty">Loading...</div></div>
   </div>
 
-  <div class="view" id="tab-hours">
-    <div class="hours-summary">
-      <div class="hours-stat"><div class="lbl">Completed orders tracked</div><div class="val" id="h-tracked">—</div></div>
-      <div class="hours-stat good"><div class="lbl">Avg accuracy (est vs actual)</div><div class="val" id="h-accuracy">—</div></div>
-      <div class="hours-stat over"><div class="lbl">Jobs over estimate</div><div class="val" id="h-over">—</div></div>
-    </div>
-    <table class="hours-table" id="hours-table-el">
-      <thead><tr><th>WO#</th><th>Customer</th><th>Equipment</th><th>Tech</th><th>Est. hrs</th><th>Actual hrs</th><th>Variance</th></tr></thead>
-      <tbody id="hours-body"></tbody>
-    </table>
-    <div id="hours-empty" class="empty" style="display:none">No completed orders with hours data yet.</div>
-  </div>
 
   <div class="view" id="tab-reminders">
     <div id="reminder-season-banner"></div>
@@ -412,7 +381,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <button class="btn" onclick="exportCSV('orders')">Work Orders CSV</button>
         <button class="btn" onclick="exportCSV('customers')">Customers CSV</button>
         <button class="btn" onclick="exportCSV('equipment')">Equipment CSV</button>
-        <button class="btn" onclick="exportCSV('hours')">Hours Report CSV</button>
         <button class="btn" onclick="exportCSV('reminders')">Reminders CSV</button>
         <button class="btn" onclick="exportJSON()">Full Backup (JSON)</button>
       </div>
@@ -567,13 +535,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     </div>
     <div class="f"><label>Est. Completion</label><input type="date" id="m-estdate"></div>
     <div class="f"><label>Date Completed</label><input type="date" id="m-dateout"></div>
-  </div>
-  <div class="sect-lbl">Hours Tracking</div>
-  <div class="g4">
-    <div class="f"><label>Est. Labor Hours</label><input type="number" id="m-est-hrs" min="0" step="0.25" placeholder="e.g. 2.0"></div>
-    <div class="f"><label>Actual Hours</label><input type="number" id="m-act-hrs" min="0" step="0.25" placeholder="Fill when done"></div>
-    <div class="f"><label>Billed Hours</label><input type="number" id="m-bill-hrs" min="0" step="0.25" placeholder="If different"></div>
-    <div class="f" style="justify-content:flex-end;padding-bottom:10px"><div id="hrs-variance-display" style="font-size:12px;color:var(--muted);padding-top:20px"></div></div>
   </div>
   </div><!-- /RIGHT column -->
   </div><!-- /wo-cols -->
@@ -947,10 +908,10 @@ function populateCustSel(){/* replaced by custSearch */}
 function orderArr(){return Object.values(ORDERS).sort(function(a,b){if(b.urgent!==a.urgent)return(b.urgent?1:0)-(a.urgent?1:0);var da=a.dateIn||'',db=b.dateIn||'';if(da&&db)return da<db?-1:da>db?1:0;return a.woNum-b.woNum;});}
 function custArr(){return Object.values(CUSTS).sort(function(a,b){return(a.last||'').localeCompare(b.last||'');});}
 function custEquip(cid){return EQUIPMENT[cid]||[];}
-function refreshAll(){renderDash();renderBoard();renderOrders();renderHours();renderReminders();renderCustomers();renderPartOrders();renderPickup();renderDaily();}
+function refreshAll(){renderDash();renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderPickup();renderDaily();}
 
 function showTab(t){
-  var tabs=['dash','board','customers','hours','reminders','pickup','daily','parts','orders','settings'];
+  var tabs=['dash','board','customers','reminders','pickup','daily','parts','orders','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
@@ -960,9 +921,6 @@ function showTab(t){
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
-function updateHrsVariance(){var e=parseFloat(document.getElementById('m-est-hrs').value)||0,a=parseFloat(document.getElementById('m-act-hrs').value)||0,el=document.getElementById('hrs-variance-display');if(e>0&&a>0){var v=a-e,pct=Math.round((v/e)*100);el.style.color=v>0?'#CC0000':'#2d7d1e';el.textContent=(v>0?'+':'')+v.toFixed(2)+'h ('+(pct>0?'+':'')+pct+'%)';}else{el.textContent='';}}
-document.getElementById('m-est-hrs').addEventListener('input',updateHrsVariance);
-document.getElementById('m-act-hrs').addEventListener('input',updateHrsVariance);
 
 function renderDash(){
   var locF=(document.getElementById('dash-loc-f')||{}).value||'';
@@ -980,15 +938,13 @@ function renderBoard(){
   var allTechs=['Unassigned'].concat(TECHS);
   el.innerHTML=allTechs.map(function(tech){
     var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;});
-    var totalEstHrs=jobs.reduce(function(s,o){return s+(parseFloat(o.estHrs)||0);},0);
-    var overloaded=jobs.length>=4||totalEstHrs>=16;
+    var overloaded=jobs.length>=4;
     var cards=jobs.length?jobs.map(function(o){
       var c=CUSTS[o.custId]||{};var isWaiting=o.status==='Waiting on Parts';
       return '<div class="board-card'+(o.urgent?' urgent':isWaiting?' waiting':'')+'" onclick="openDet(\''+o.id+'\')">'
         +'<div class="bc-wo">#'+o.woNum+'</div><div class="bc-cust">'+(c.first||'')+' '+(c.last||'')+'</div>'
         +'<div class="bc-equip">'+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
         +'<div class="bc-meta">'+badge(o.status||'Intake')+(o.urgent?'<span class="badge b-urgent">!</span>':'')+'</div>'
-        +(o.estHrs?'<div class="bc-hours">Est: '+o.estHrs+'h'+(o.actHrs?' &middot; Act: '+o.actHrs+'h':'')+'</div>':'')
         +'</div>';
     }).join(''):'<div class="board-empty">No open orders</div>';
     return '<div class="board-col"><div class="board-col-hdr'+(overloaded?' overloaded':'')+'"><span>'+tech+'</span><span class="col-count">'+jobs.length+'</span></div><div class="board-col-body">'+cards+'</div></div>';
@@ -1003,17 +959,6 @@ function renderOrders(){
   el.innerHTML=list.map(function(o){return woRow(o,CUSTS[o.custId]||{});}).join('');
 }
 
-function renderHours(){
-  var tracked=orderArr().filter(function(o){return o.status==='Picked Up'&&o.estHrs&&o.actHrs;});
-  var tbody=document.getElementById('hours-body'),emptyEl=document.getElementById('hours-empty');
-  if(!tracked.length){if(tbody)tbody.innerHTML='';if(emptyEl)emptyEl.style.display='';document.getElementById('h-tracked').textContent='0';document.getElementById('h-accuracy').textContent='—';document.getElementById('h-over').textContent='0';return;}
-  if(emptyEl)emptyEl.style.display='none';
-  var totalVar=0,over=0;tracked.forEach(function(o){var v=(parseFloat(o.actHrs)||0)-(parseFloat(o.estHrs)||0);totalVar+=v/parseFloat(o.estHrs);if(v>0)over++;});
-  var avgPct=Math.round((totalVar/tracked.length)*100);
-  document.getElementById('h-tracked').textContent=tracked.length;document.getElementById('h-accuracy').textContent=(avgPct>=0?'+':'')+avgPct+'%';document.getElementById('h-over').textContent=over;
-  if(tbody){tbody.innerHTML=tracked.map(function(o){var c=CUSTS[o.custId]||{},est=parseFloat(o.estHrs),act=parseFloat(o.actHrs),v=act-est,pct=Math.round((v/est)*100),isOver=v>0,barW=Math.min(Math.round((act/Math.max(est,act))*80),80);return '<tr onclick="openDet(\''+o.id+'\')">'+'<td style="font-weight:700;color:var(--red)">#'+o.woNum+'</td><td>'+(c.first||'')+' '+(c.last||'')+'</td><td style="color:var(--gray2);font-size:11px">'+(o.brand||'')+' '+(o.equipType||'')+'</td><td>'+(o.tech||'')+'</td><td>'+est.toFixed(2)+'h</td><td>'+act.toFixed(2)+'h<span class="hrs-bar-wrap"><span class="hrs-bar'+(isOver?' over':'')+'" style="width:'+barW+'px"></span></span></td><td class="'+(isOver?'over-est':'under-est')+'">'+(v>0?'+':'')+v.toFixed(2)+'h ('+(pct>0?'+':'')+pct+'%)</td></tr>';}).join('');}
-}
-
 function woRow(o,c){
   var isWaiting=o.status==='Waiting on Parts';
   var custName=(c&&(c.first||c.last))?(c.first||'')+' '+(c.last||''):'—';
@@ -1025,7 +970,7 @@ function woRow(o,c){
     +'<div class="wo-equip">'+equip+(o.serial?' | SN: '+o.serial:'')+(isWaiting&&o.partsWaiting?' · '+o.partsWaiting:'')+'</div>'
     +(o.dateIn?'<div style="font-size:15px;font-weight:700;color:var(--muted);margin-top:3px">In: '+o.dateIn+(o.estDate?' · Est: '+o.estDate:'')+(o.tech?' · '+o.tech:'')+'</div>':'')
     +'</div>'
-    +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+(o.estHrs?'<span style="font-size:10px;color:var(--muted)">'+o.estHrs+'h</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
+    +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
     +'</div>';
 }
 
@@ -1041,13 +986,12 @@ function renderCustomers(){
 function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
-  ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-est-hrs','m-act-hrs','m-bill-hrs','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
+  ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
   document.getElementById('m-location').value='Yellville';
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
   document.getElementById('m-urg').checked=false;document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
   document.getElementById('pt-body').innerHTML='';document.getElementById('waiting-parts-row').style.display='none';
-  document.getElementById('hrs-variance-display').textContent='';
   document.getElementById('wo-modal').classList.add('open');
 }
 function openEditWO(id){
@@ -1063,13 +1007,10 @@ function openEditWO(id){
   document.getElementById('m-status').value=o.status||'Intake';document.getElementById('m-datein').value=o.dateIn||'';
   document.getElementById('m-estdate').value=o.estDate||'';document.getElementById('m-dateout').value=o.dateOut||'';
   document.getElementById('m-urg').checked=!!o.urgent;document.getElementById('m-deposit').checked=!!o.deposit;document.getElementById('m-paid').checked=!!o.paid;document.getElementById('m-parts-waiting').value=o.partsWaiting||'';
-  document.getElementById('m-est-hrs').value=o.estHrs||'';document.getElementById('m-act-hrs').value=o.actHrs||'';
-  document.getElementById('m-bill-hrs').value=o.billHrs||'';
   document.getElementById('m-tag').value=o.tag||'';
   document.getElementById('m-ticket').value=o.ticket||'';
   document.getElementById('m-location').value=o.location||'Yellville';
   document.getElementById('waiting-parts-row').style.display=o.status==='Waiting on Parts'?'block':'none';
-  updateHrsVariance();
   var pb=document.getElementById('pt-body');pb.innerHTML='';(o.parts||[]).forEach(function(p){appPR(p);});
   closeM('det-modal');document.getElementById('wo-modal').classList.add('open');
 }
@@ -1083,7 +1024,7 @@ function saveWO(){
   var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
   var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
   var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
-  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,estHrs:document.getElementById('m-est-hrs').value,actHrs:document.getElementById('m-act-hrs').value,billHrs:document.getElementById('m-bill-hrs').value,parts:getParts()};
+  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
   writeOrder(o);closeM('wo-modal');
 }
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
@@ -1144,8 +1085,6 @@ function openDet(id){
   var logs=CONTACTLOGS[id]||[];
   var logHtml=logs.length?logs.map(function(l,i){return '<div class="contact-log-entry"><div style="font-weight:600">'+l.type+'</div><div>'+l.note+'</div><div class="cl-meta">'+l.dt+'<button class="btn sm del" onclick="deleteContactLog(\''+id+'\','+i+')" style="margin-left:8px;padding:1px 6px;font-size:10px">remove</button></div></div>';}).join(''):'<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No contact logged yet.</div>';
   var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+o.partsWaiting+'</div>':'';
-  var est=parseFloat(o.estHrs)||0,act=parseFloat(o.actHrs)||0,bill=parseFloat(o.billHrs)||0;
-  var hrsHtml=(est||act||bill)?'<div class="sect-lbl">Hours</div><div class="g3">'+(est?'<div><div class="df-lbl">Estimated</div><div class="df-val">'+est.toFixed(2)+'h</div></div>':'')+(act?'<div><div class="df-lbl">Actual</div><div class="df-val">'+act.toFixed(2)+'h'+(est&&act?'<span style="margin-left:6px;font-size:14px;color:'+(act>est?'var(--red)':'#2d7d1e')+'">'+(act>est?'+':'')+(act-est).toFixed(2)+'h</span>':'')+'</div></div>':'')+(bill?'<div><div class="df-lbl">Billed</div><div class="df-val">'+bill.toFixed(2)+'h</div></div>':'')+'</div>':'';
   var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
   document.getElementById('det-body').innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
@@ -1158,7 +1097,7 @@ function openDet(id){
     +'<div style="flex:1;min-width:160px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Add a Note</div><input type="text" id="ql-gen-note-'+id+'" placeholder="Type a note, then tap Add Note" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<button class="btn sm primary" onclick="quickAddNote(\''+id+'\')" style="align-self:flex-end">+ Add Note</button>'
     +'</div>'
-    +hrsHtml+'<hr>'
+    +'<hr>'
     +(o.parts&&o.parts.length?'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Description</th><th style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Qty</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Notes</th></tr></thead><tbody>'+prows+'</tbody></table>':'<div style="font-size:12px;color:var(--muted);padding:6px 0;font-style:italic">No parts or labor logged.</div>')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-top:6px">'
     +'<div style="flex:2;min-width:120px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Part # / Description</div><input type="text" id="ql-note-'+id+'" placeholder="e.g. Air filter, Labor..." style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
@@ -1249,7 +1188,6 @@ function printWO(id){
   var locAddr=(o.location==='Harrison')?'#2 Necessity Ave &middot; Harrison, AR 72601 &middot; (870) 741-3493':'1609 Hwy 62 West &middot; Yellville, AR 72687 &middot; (870) 449-4255';
   var custName=((c.first||'')+' '+(c.last||'')).trim();
   var equipLine=[o.brand,o.equipType].filter(Boolean).join(' ');
-  var bill=parseFloat(o.billHrs)||0;
   var lines=function(n){var s='';for(var i=0;i<n;i++){s+='<div style="border-bottom:1px solid #aaa;height:22px;margin-bottom:3px"></div>';}return s;};
   var existParts=(o.parts||[]).length;
   var prows=(o.parts||[]).map(function(p){
@@ -1392,7 +1330,6 @@ function exportCSV(type){
   if(type==='orders'){rows=[['WO#','Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Hours','Status','Parts Waiting','Tech','Date In','Est Date','Date Out','Urgent','Est Hrs','Actual Hrs','Billed Hrs','Complaint','Notes']];orderArr().forEach(function(o){var c=CUSTS[o.custId]||{};rows.push([o.woNum,(c.first||'')+' '+(c.last||''),c.phone||'',o.equipType||'',o.brand||'',o.year||'',o.model||'',o.serial||'',o.engine||'',o.hours||'',o.status||'',o.partsWaiting||'',o.tech||'',o.dateIn||'',o.estDate||'',o.dateOut||'',o.urgent?'Yes':'No',o.estHrs||'',o.actHrs||'',o.billHrs||'','"'+(o.complaint||'').replace(/"/g,"''")+'"','"'+(o.notes||'').replace(/"/g,"''")+'"']);});fn='sawshop-orders-'+today()+'.csv';}
   else if(type==='customers'){rows=[['First','Last','Phone','Email','Address','Notes']];custArr().forEach(function(c){rows.push([c.first||'',c.last||'',c.phone||'',c.email||'',c.addr||'','"'+(c.notes||'').replace(/"/g,"''")+'"']);});fn='sawshop-customers-'+today()+'.csv';}
   else if(type==='equipment'){rows=[['Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Date','Record Type','Warranty Exp','Warranty Notes','Notes']];custArr().forEach(function(c){custEquip(c.id).forEach(function(e){rows.push([(c.first||'')+' '+(c.last||''),c.phone||'',e.type||'',e.brand||'',e.year||'',e.model||'',e.serial||'',e.engine||'',e.date||'',e.rectype||'sale',e.warrantyExp||'',e.warrantyNotes||'','"'+(e.notes||'').replace(/"/g,"''")+'"']);});});fn='sawshop-equipment-'+today()+'.csv';}
-  else if(type==='hours'){rows=[['WO#','Customer','Tech','Equipment','Est Hrs','Actual Hrs','Billed Hrs','Variance Hrs','Variance %']];orderArr().filter(function(o){return o.status==='Picked Up'&&(o.estHrs||o.actHrs);}).forEach(function(o){var c=CUSTS[o.custId]||{},est=parseFloat(o.estHrs)||0,act=parseFloat(o.actHrs)||0,v=act-est,pct=est?Math.round((v/est)*100):0;rows.push([o.woNum,(c.first||'')+' '+(c.last||''),o.tech||'',(o.brand||'')+' '+(o.equipType||''),est||'',act||'',o.billHrs||'',v?v.toFixed(2):'',pct?pct+'%':'']);});fn='sawshop-hours-'+today()+'.csv';}
   else{rows=[['Customer','Phone','Equipment','Type','Detail','Last Service']];buildReminders().forEach(function(r){rows.push([r.custName,r.phone,r.equip,r.type,r.detail.replace(/<[^>]*>/g,''),r.lastSvc||'']);});fn='sawshop-reminders-'+today()+'.csv';}
   var csv=rows.map(function(r){return r.join(',');}).join('\
 ');
