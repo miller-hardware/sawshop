@@ -234,7 +234,9 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 .daily-section{background:var(--white);border:1.5px solid var(--silver);border-radius:3px;padding:14px;margin-bottom:12px}
 .daily-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
 .daily-grid .daily-section{margin-bottom:0}
-@media(max-width:540px){.daily-grid{grid-template-columns:1fr}}
+.pickup-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.pickup-grid .pickup-row{margin-bottom:0}
+@media(max-width:540px){.daily-grid{grid-template-columns:1fr}.pickup-grid{grid-template-columns:1fr}}
 .daily-hdr{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1.5px solid var(--silver);display:flex;justify-content:space-between;align-items:center}
 .cust-alert{background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:6px 10px;font-size:12px;color:#633806;margin-bottom:10px;display:flex;align-items:center;gap:7px}
 
@@ -1563,13 +1565,14 @@ function renderDaily(){
   el.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Pickup &amp; Report — '+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+'</div>';
 
   // Build a section into a given parent (el = full width, grid = 2-column area)
-  function makeSection(parent,title,titleColor,items,renderFn){
+  function makeSection(parent,title,titleColor,items,renderFn,gridBody){
     var sec=document.createElement('div');sec.className='daily-section';
     var hdr=document.createElement('div');hdr.className='daily-hdr';
     if(titleColor)hdr.style.color=titleColor;
     hdr.innerHTML='<span>'+title+' ('+items.length+')</span>';
     sec.appendChild(hdr);
     if(!items.length){var none=document.createElement('div');none.style.cssText='font-size:13px;color:var(--muted);font-style:italic';none.textContent='None';sec.appendChild(none);}
+    else if(gridBody){var g=document.createElement('div');g.className='pickup-grid';items.forEach(function(item){var row=renderFn(item);if(row)g.appendChild(row);});sec.appendChild(g);}
     else{items.forEach(function(item){var row=renderFn(item);if(row)sec.appendChild(row);});}
     parent.appendChild(sec);
   }
@@ -1606,7 +1609,7 @@ function renderDaily(){
       +(o.paid?'<span class="b-paid">Paid</span>':o.deposit?'<span class="b-deposit">Deposit</span>':'<span style="font-size:11px;color:var(--muted)">No payment</span>');
     row.appendChild(info);row.appendChild(meta);
     return row;
-  });
+  },true);
 
   // BELOW — remaining sections in a 2-column grid (stacks to 1 column on mobile)
   var grid=document.createElement('div');grid.className='daily-grid';el.appendChild(grid);
