@@ -232,6 +232,9 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 .pickup-row{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1.5px solid var(--silver);border-radius:3px;margin-bottom:7px;background:var(--white);cursor:pointer}
 .pickup-row:hover{border-color:var(--red)}
 .daily-section{background:var(--white);border:1.5px solid var(--silver);border-radius:3px;padding:14px;margin-bottom:12px}
+.daily-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.daily-grid .daily-section{margin-bottom:0}
+@media(max-width:540px){.daily-grid{grid-template-columns:1fr}}
 .daily-hdr{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1.5px solid var(--silver);display:flex;justify-content:space-between;align-items:center}
 .cust-alert{background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:6px 10px;font-size:12px;color:#633806;margin-bottom:10px;display:flex;align-items:center;gap:7px}
 
@@ -252,9 +255,8 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="tab active" onclick="showTab('dash')">Dashboard</div>
       <div class="tab" onclick="showTab('board')">Shop Load</div>
       <div class="tab" onclick="showTab('customers')">Customers</div>
+      <div class="tab" onclick="showTab('daily')">📞 Pickup &amp; Report</div>
       <div class="tab" onclick="showTab('reminders')">Reminders <span class="tab-badge" id="reminder-badge" style="display:none">0</span></div>
-      <div class="tab" onclick="showTab('pickup')">📞 Pickup Calls</div>
-      <div class="tab" onclick="showTab('daily')">Morning Report</div>
       <div class="tab" onclick="showTab('parts')">🔧 Parts to Order</div>
       <div class="tab" onclick="showTab('orders')">Work Order Archive</div>
       <div class="tab" onclick="showTab('settings')">Settings</div>
@@ -333,11 +335,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <button class="btn" onclick="openNewCust()">+ Add Customer</button>
     </div>
     <div id="cust-list"><div class="empty">Loading...</div></div>
-  </div>
-
-  <div class="view" id="tab-pickup">
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">All orders marked Ready for Pickup. Tap a phone number to call.</div>
-    <div id="pickup-list"><div class="empty">Loading...</div></div>
   </div>
 
   <div class="view" id="tab-daily">
@@ -908,14 +905,13 @@ function populateCustSel(){/* replaced by custSearch */}
 function orderArr(){return Object.values(ORDERS).sort(function(a,b){if(b.urgent!==a.urgent)return(b.urgent?1:0)-(a.urgent?1:0);var da=a.dateIn||'',db=b.dateIn||'';if(da&&db)return da<db?-1:da>db?1:0;return a.woNum-b.woNum;});}
 function custArr(){return Object.values(CUSTS).sort(function(a,b){return(a.last||'').localeCompare(b.last||'');});}
 function custEquip(cid){return EQUIPMENT[cid]||[];}
-function refreshAll(){renderDash();renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderPickup();renderDaily();}
+function refreshAll(){renderDash();renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
 
 function showTab(t){
-  var tabs=['dash','board','customers','reminders','pickup','daily','parts','orders','settings'];
+  var tabs=['dash','board','customers','daily','reminders','parts','orders','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
-  if(t==='pickup')renderPickup();
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
 }
@@ -1551,20 +1547,40 @@ function loadAgeInputs(){
   if(o)o.value=SETTINGS.ageOldDays;
 }
 
-function renderPickup(){
-  var el=document.getElementById('pickup-list');if(!el)return;
-  var list=orderArr().filter(function(o){
-    return o.status==='Ready';
-  });
-  if(!list.length){el.innerHTML='<div class="empty">No orders ready for pickup.</div>';return;}
-  el.innerHTML='';
-  list.forEach(function(o){
+function renderDaily(){
+  var el=document.getElementById('daily-report');if(!el)return;
+  var now=new Date();
+  var todayStr=today();
+  var all=orderArr();
+  var open=all.filter(function(o){return o.status!=='Picked Up';});
+  var ready=open.filter(function(o){return o.status==='Ready';});
+  var overdue=open.filter(function(o){return o.estDate&&o.estDate<todayStr&&o.status!=='Ready'&&o.status!=='Picked Up';});
+  var old=open.filter(function(o){if(!o.dateIn)return false;return Math.floor((now-new Date(o.dateIn))/(1000*60*60*24))>=SETTINGS.ageOldDays;});
+  var partsIn=[];
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.received)partsIn.push({cat:cat,idx:i,p:p});});});
+  var waiting=open.filter(function(o){return o.status==='Waiting on Parts';});
+
+  el.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Pickup &amp; Report — '+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+'</div>';
+
+  // Build a section into a given parent (el = full width, grid = 2-column area)
+  function makeSection(parent,title,titleColor,items,renderFn){
+    var sec=document.createElement('div');sec.className='daily-section';
+    var hdr=document.createElement('div');hdr.className='daily-hdr';
+    if(titleColor)hdr.style.color=titleColor;
+    hdr.innerHTML='<span>'+title+' ('+items.length+')</span>';
+    sec.appendChild(hdr);
+    if(!items.length){var none=document.createElement('div');none.style.cssText='font-size:13px;color:var(--muted);font-style:italic';none.textContent='None';sec.appendChild(none);}
+    else{items.forEach(function(item){var row=renderFn(item);if(row)sec.appendChild(row);});}
+    parent.appendChild(sec);
+  }
+
+  // TOP — Ready for Pickup, full width with rich call detail (phone, Text button, last contact, payment)
+  makeSection(el,'Ready for Pickup','',ready,function(o){
     var c=CUSTS[o.custId]||{};
     var row=document.createElement('div');
     row.className='pickup-row';
     row.onclick=function(){openDet(o.id);};
-    var info=document.createElement('div');
-    info.style.flex='1';
+    var info=document.createElement('div');info.style.flex='1';
     var lastLog=(CONTACTLOGS[o.id]||[])[0];
     var lastContactLine=lastLog
       ?'<div style="font-size:11px;color:var(--muted)">Last contact: '+lastLog.dt+' &middot; '+lastLog.type+'</div>'
@@ -1586,52 +1602,17 @@ function renderPickup(){
     }
     var meta=document.createElement('div');
     meta.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0';
-    meta.innerHTML='<span class="badge '+(o.status==='Ready'?'b-ready':'b-complete')+'">'+o.status+'</span>'
+    meta.innerHTML='<span class="badge b-ready">'+o.status+'</span>'
       +(o.paid?'<span class="b-paid">Paid</span>':o.deposit?'<span class="b-deposit">Deposit</span>':'<span style="font-size:11px;color:var(--muted)">No payment</span>');
     row.appendChild(info);row.appendChild(meta);
-    el.appendChild(row);
-  });
-}
-
-function renderDaily(){
-  var el=document.getElementById('daily-report');if(!el)return;
-  var now=new Date();
-  var todayStr=today();
-  var all=orderArr();
-  var open=all.filter(function(o){return o.status!=='Picked Up';});
-  var ready=open.filter(function(o){return o.status==='Ready';});
-  var overdue=open.filter(function(o){return o.estDate&&o.estDate<todayStr&&o.status!=='Ready'&&o.status!=='Picked Up';});
-  var old=open.filter(function(o){if(!o.dateIn)return false;return Math.floor((now-new Date(o.dateIn))/(1000*60*60*24))>=SETTINGS.ageOldDays;});
-  var partsIn=[];
-  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.received)partsIn.push({cat:cat,idx:i,p:p});});});
-  var waiting=open.filter(function(o){return o.status==='Waiting on Parts';});
-
-  el.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Morning Report — '+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+'</div>';
-
-  function makeSection(title,titleColor,items,renderFn){
-    var sec=document.createElement('div');sec.className='daily-section';
-    var hdr=document.createElement('div');hdr.className='daily-hdr';
-    if(titleColor)hdr.style.color=titleColor;
-    hdr.innerHTML='<span>'+title+' ('+items.length+')</span>';
-    sec.appendChild(hdr);
-    if(!items.length){var none=document.createElement('div');none.style.cssText='font-size:13px;color:var(--muted);font-style:italic';none.textContent='None';sec.appendChild(none);}
-    else{items.forEach(function(item){var row=renderFn(item);if(row)sec.appendChild(row);});}
-    el.appendChild(sec);
-  }
-
-  // Ready for pickup
-  makeSection('Ready for Pickup','',ready,function(o){
-    var c=CUSTS[o.custId]||{};
-    var row=document.createElement('div');
-    row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--off)';
-    row.innerHTML='<div style="cursor:pointer"><strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')+'</div>'
-      +(c.phone?'<div style="display:flex;gap:8px;align-items:center"><a href="tel:'+c.phone+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:13px;text-decoration:none">📞 '+c.phone+'</a><a href="#" onclick="event.preventDefault();event.stopPropagation();textCustomer(\''+o.id+'\')" style="color:#2d7d1e;font-weight:700;font-size:13px;text-decoration:none">📱 Text</a></div>':'');
-    row.querySelector('div').onclick=function(){openDet(o.id);};
     return row;
   });
 
+  // BELOW — remaining sections in a 2-column grid (stacks to 1 column on mobile)
+  var grid=document.createElement('div');grid.className='daily-grid';el.appendChild(grid);
+
   // Parts in
-  makeSection('Parts In / Received','',partsIn,function(item){
+  makeSection(grid,'Parts In / Received','',partsIn,function(item){
     var p=item.p;var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;var c=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off)';
@@ -1643,7 +1624,7 @@ function renderDaily(){
   });
 
   // Overdue
-  makeSection('Past Estimated Date','var(--red)',overdue,function(o){
+  makeSection(grid,'Past Estimated Date','var(--red)',overdue,function(o){
     var c=CUSTS[o.custId]||{};
     var days=Math.floor((now-new Date(o.estDate))/(1000*60*60*24));
     var row=document.createElement('div');
@@ -1654,7 +1635,7 @@ function renderDaily(){
   });
 
   // Old jobs
-  makeSection('Jobs Sitting '+SETTINGS.ageOldDays+'+ Days','#BA7517',old,function(o){
+  makeSection(grid,'Jobs Sitting '+SETTINGS.ageOldDays+'+ Days','#BA7517',old,function(o){
     var c=CUSTS[o.custId]||{};
     var days=Math.floor((now-new Date(o.dateIn))/(1000*60*60*24));
     var row=document.createElement('div');
@@ -1665,7 +1646,7 @@ function renderDaily(){
   });
 
   // Waiting on parts
-  makeSection('Waiting on Parts','',waiting,function(o){
+  makeSection(grid,'Waiting on Parts','',waiting,function(o){
     var c=CUSTS[o.custId]||{};
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off);cursor:pointer';
