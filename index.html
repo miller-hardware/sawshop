@@ -269,13 +269,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="tabs">
       <div class="tab active" onclick="showTab('dash')">Dashboard</div>
       <div class="tab" onclick="showTab('board')">Shop Load</div>
-      <div class="tab" onclick="showTab('orders')">Work Orders</div>
+      <div class="tab" onclick="showTab('customers')">Customers</div>
       <div class="tab" onclick="showTab('hours')">Hours</div>
       <div class="tab" onclick="showTab('reminders')">Reminders <span class="tab-badge" id="reminder-badge" style="display:none">0</span></div>
-      <div class="tab" onclick="showTab('customers')">Customers</div>
       <div class="tab" onclick="showTab('pickup')">📞 Pickup Calls</div>
       <div class="tab" onclick="showTab('daily')">Morning Report</div>
       <div class="tab" onclick="showTab('parts')">🔧 Parts to Order</div>
+      <div class="tab" onclick="showTab('orders')">Work Order Archive</div>
       <div class="tab" onclick="showTab('settings')">Settings</div>
     </div>
     <button class="btn primary" onclick="openNewWO()">+ New Work Order</button>
@@ -504,7 +504,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px">
     <input type="checkbox" id="m-urg" style="width:15px;height:15px;accent-color:var(--red)"> Mark as Priority / Urgent
   </label>
-  <div class="g2" style="margin-bottom:0">
+  <div class="g3" style="margin-bottom:0">
     <div class="f"><label>Location</label>
       <select id="m-location">
         <option value="Yellville">Yellville</option>
@@ -512,6 +512,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </select>
     </div>
     <div class="f"><label>Hang Tag #</label><input type="text" id="m-tag" placeholder="e.g. A-14"></div>
+    <div class="f"><label>Open Ticket # (POS)</label><input type="text" id="m-ticket" placeholder="POS ticket #"></div>
   </div>
   <div class="sect-lbl">Equipment Record</div>
   <div class="g3">
@@ -905,7 +906,7 @@ function initFB(){
     });
     DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();});
     DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();});
-    DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();});
+    DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
     DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
     DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
     DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
@@ -949,7 +950,7 @@ function custEquip(cid){return EQUIPMENT[cid]||[];}
 function refreshAll(){renderDash();renderBoard();renderOrders();renderHours();renderReminders();renderCustomers();renderPartOrders();renderPickup();renderDaily();}
 
 function showTab(t){
-  var tabs=['dash','board','orders','hours','reminders','customers','pickup','daily','parts','settings'];
+  var tabs=['dash','board','customers','hours','reminders','pickup','daily','parts','orders','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
@@ -1040,7 +1041,7 @@ function renderCustomers(){
 function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
-  ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-est-hrs','m-act-hrs','m-bill-hrs','m-tag'].forEach(function(id){document.getElementById(id).value='';});custClear();
+  ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-est-hrs','m-act-hrs','m-bill-hrs','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
   document.getElementById('m-location').value='Yellville';
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
@@ -1065,6 +1066,7 @@ function openEditWO(id){
   document.getElementById('m-est-hrs').value=o.estHrs||'';document.getElementById('m-act-hrs').value=o.actHrs||'';
   document.getElementById('m-bill-hrs').value=o.billHrs||'';
   document.getElementById('m-tag').value=o.tag||'';
+  document.getElementById('m-ticket').value=o.ticket||'';
   document.getElementById('m-location').value=o.location||'Yellville';
   document.getElementById('waiting-parts-row').style.display=o.status==='Waiting on Parts'?'block':'none';
   updateHrsVariance();
@@ -1081,7 +1083,7 @@ function saveWO(){
   var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
   var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
   var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
-  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,location:document.getElementById('m-location').value,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,estHrs:document.getElementById('m-est-hrs').value,actHrs:document.getElementById('m-act-hrs').value,billHrs:document.getElementById('m-bill-hrs').value,parts:getParts()};
+  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,estHrs:document.getElementById('m-est-hrs').value,actHrs:document.getElementById('m-act-hrs').value,billHrs:document.getElementById('m-bill-hrs').value,parts:getParts()};
   writeOrder(o);closeM('wo-modal');
 }
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
@@ -1146,7 +1148,7 @@ function openDet(id){
   var hrsHtml=(est||act||bill)?'<div class="sect-lbl">Hours</div><div class="g3">'+(est?'<div><div class="df-lbl">Estimated</div><div class="df-val">'+est.toFixed(2)+'h</div></div>':'')+(act?'<div><div class="df-lbl">Actual</div><div class="df-val">'+act.toFixed(2)+'h'+(est&&act?'<span style="margin-left:6px;font-size:14px;color:'+(act>est?'var(--red)':'#2d7d1e')+'">'+(act>est?'+':'')+(act-est).toFixed(2)+'h</span>':'')+'</div></div>':'')+(bill?'<div><div class="df-lbl">Billed</div><div class="df-val">'+bill.toFixed(2)+'h</div></div>':'')+'</div>':'';
   var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
   document.getElementById('det-body').innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
     +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
@@ -1319,6 +1321,7 @@ function printWO(id){
     +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555">Service Work Order</div>'
     +'<div style="font-size:28px;font-weight:800;line-height:1">#'+o.woNum+'</div>'
     +(o.tag?'<div style="font-size:12px;font-weight:700">Tag # '+o.tag+'</div>':'')
+    +(o.ticket?'<div style="font-size:11px;color:#555">Open Ticket # '+o.ticket+'</div>':'')
     +(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')
     +(o.estDate?'<div style="font-size:11px;color:#555">Est. Done: '+o.estDate+'</div>':'')
     +'</div>'
