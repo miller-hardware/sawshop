@@ -1115,14 +1115,16 @@ function openDet(id){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-top:6px">'
     +'<div style="flex:2;min-width:120px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Part # / Description</div><input type="text" id="ql-note-'+id+'" placeholder="e.g. Air filter, Labor..." style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<div style="width:60px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Qty</div><input type="number" id="ql-qty-'+id+'" value="1" min="1" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
-    +'<button class="btn sm primary" onclick="quickAddPart(\''+id+'\')" style="align-self:flex-end">+ Add Part</button>'
+    +'<button class="btn sm primary" onclick="quickAddPart(\''+id+'\')" style="align-self:flex-end">+ Stock Part</button>'
+    +'<button class="btn sm amber" onclick="openPartOrder(\'stihl\',\''+id+'\')" style="align-self:flex-end">+ Stihl Part</button>'
+    +'<button class="btn sm amber" onclick="openPartOrder(\'other\',\''+id+'\')" style="align-self:flex-end">+ Other Part</button>'
     +'</div>'
     +'<div class="sect-lbl">Customer Contact Log</div>'+logHtml
     +'<button class="btn sm outline" onclick="openContactLog(\''+id+'\')" style="margin-top:8px">+ Log Contact</button>'
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
     +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
     +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
-    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button><button class="btn amber" style="padding:6px 12px" onclick="openPartOrder(\'stihl\',\''+id+'\')">+ Stihl Part</button><button class="btn amber" style="padding:6px 12px" onclick="openPartOrder(\'other\',\''+id+'\')">+ Other Part</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
+    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
 
@@ -1522,11 +1524,23 @@ function renderPartOrders(){
   ['stihl','other'].forEach(function(cat){
     var el=document.getElementById('po-'+cat+'-list');if(!el)return;
     var list=PARTORDERS[cat]||[];
-    var pending=list.filter(function(p){return!p.received;});
+    var pending=[];
+    list.forEach(function(p,i){if(!p.received)pending.push({p:p,i:i});});
     if(!pending.length){el.innerHTML='<div class="empty" style="padding:10px 0">None pending</div>';return;}
     el.innerHTML='';
-    list.forEach(function(p,i){
-      if(p.received)return;
+    // Group pending parts by vendor: "needs vendor" bucket first, then vendors in admin-list order
+    var groups={};
+    pending.forEach(function(it){var v=it.p.vendor||'';if(!groups[v])groups[v]=[];groups[v].push(it);});
+    var vOrder=[''].concat(VENDORS.slice());
+    Object.keys(groups).forEach(function(v){if(vOrder.indexOf(v)<0)vOrder.push(v);});
+    vOrder.forEach(function(v){
+      var items=groups[v];if(!items||!items.length)return;
+      var ghdr=document.createElement('div');
+      ghdr.style.cssText='font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 0 3px;color:'+(v?'var(--dark)':'#BA7517');
+      ghdr.textContent=(v||'⚠ Needs vendor')+' ('+items.length+')';
+      el.appendChild(ghdr);
+      items.forEach(function(it){
+      var p=it.p,i=it.i;
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
@@ -1570,8 +1584,8 @@ function renderPartOrders(){
       btns.appendChild(bOrd);btns.appendChild(bRec);btns.appendChild(bPaid);btns.appendChild(bDel);
       row.appendChild(info);row.appendChild(btns);
       el.appendChild(row);
+      });
     });
-    if(el.innerHTML==='')el.innerHTML='<div class="empty" style="padding:10px 0">None pending</div>';
   });
 }
 var SETTINGS={ageWarnDays:7,ageOldDays:14};
