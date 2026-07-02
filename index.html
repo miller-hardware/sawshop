@@ -408,6 +408,15 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         </div>
       </div>
       <div class="card">
+        <div class="card-hdr">Parts Vendor Management</div>
+        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Vendors show as a dropdown on each part in the Parts to Order lists, so the orderer can pick who to order from.</div>
+        <div id="vendor-chips" style="margin-bottom:10px"></div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <input type="text" id="new-vendor" placeholder="Vendor name..." style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:'Barlow',sans-serif;min-width:180px" onkeydown="if(event.key==='Enter')addVendor()">
+          <button class="btn primary" onclick="addVendor()">Add Vendor</button>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-hdr">Firebase Cloud Sync</div>
         <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Firebase config is baked in — connects automatically. Use the button below if you're having connection trouble.</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
@@ -685,7 +694,7 @@ var FB_BAKED = {
   messagingSenderId: "187757043776",
   appId: "1:187757043776:web:a0cce22b59172da8db7fa5"
 };
-var DB=null,STORAGE=null,ORDERS={},CUSTS={},TECHS=['Michael','Tech 2','Tech 3'],EQUIPMENT={},ATTACHMENTS={},CONTACTLOGS={},PARTORDERS={stihl:[],other:[]};
+var DB=null,STORAGE=null,ORDERS={},CUSTS={},TECHS=['Michael','Tech 2','Tech 3'],VENDORS=[],EQUIPMENT={},ATTACHMENTS={},CONTACTLOGS={},PARTORDERS={stihl:[],other:[]};
 var editWOid=null,editCid=null,editEqCid=null,editEqIdx=null,contactLogWOid=null,nextWO=1001;
 var activeRFilter='all';
 var SVC_INTERVALS={chainsaw:12,mower:12,generator:24,trimmer:18,other:18};
@@ -827,13 +836,13 @@ function renderReminders(){
 
 function loadLocal(){
   try{var d=JSON.parse(localStorage.getItem('sawshop_v8')||'{}');
-    ORDERS=d.orders||{};CUSTS=d.customers||{};TECHS=d.techs||['Michael','Tech 2','Tech 3'];
+    ORDERS=d.orders||{};CUSTS=d.customers||{};TECHS=d.techs||['Michael','Tech 2','Tech 3'];VENDORS=d.vendors||[];
     EQUIPMENT=d.equipment||{};ATTACHMENTS=d.attachments||{};CONTACTLOGS=d.contactlogs||{};nextWO=d.nextWO||1001;
     if(d.svcIntervals)SVC_INTERVALS=d.svcIntervals;
     if(d.settings)SETTINGS=Object.assign(SETTINGS,d.settings);
   }catch(e){}
 }
-function saveLocal(){try{localStorage.setItem('sawshop_v8',JSON.stringify({orders:ORDERS,customers:CUSTS,techs:TECHS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,nextWO:nextWO,svcIntervals:SVC_INTERVALS,settings:SETTINGS}));}catch(e){}}
+function saveLocal(){try{localStorage.setItem('sawshop_v8',JSON.stringify({orders:ORDERS,customers:CUSTS,techs:TECHS,vendors:VENDORS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,nextWO:nextWO,svcIntervals:SVC_INTERVALS,settings:SETTINGS}));}catch(e){}}
 
 function saveIntervals(){
   SVC_INTERVALS={
@@ -867,6 +876,7 @@ function initFB(){
     DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();});
     DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();});
     DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
+    DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
     DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
     DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
     DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
@@ -878,7 +888,7 @@ function initFB(){
     loadLocal();boot();
   }
 }
-function boot(){refreshAll();renderTechs();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();}
+function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();}
 
 function loadIntervalInputs(){
   document.getElementById('si-chainsaw').value=SVC_INTERVALS.chainsaw;
@@ -900,6 +910,11 @@ function writePartOrders(){if(DB){DB.ref('partorders').set(PARTORDERS);}else{sav
 function addTech(){var n=document.getElementById('new-tech').value.trim();if(!n||TECHS.indexOf(n)>=0)return;TECHS.push(n);writeTechs();renderTechs();populateTechSels();document.getElementById('new-tech').value='';}
 function removeTech(n){requireAdminDelete('Remove tech '+n+'?',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();});}
 function renderTechs(){var el=document.getElementById('tech-chips');if(!el)return;el.innerHTML=TECHS.map(function(t){return '<span class="tech-chip">'+t+'<button onclick="removeTech(\''+t+'\')">&#x2715;</button></span>';}).join('');}
+
+function writeVendors(){if(DB){DB.ref('vendors').set(VENDORS);}else{saveLocal();}}
+function addVendor(){var n=document.getElementById('new-vendor').value.trim();if(!n||VENDORS.indexOf(n)>=0)return;VENDORS.push(n);writeVendors();renderVendors();renderPartOrders();document.getElementById('new-vendor').value='';}
+function removeVendor(n){requireAdminDelete('Remove vendor '+n+'?',function(){VENDORS=VENDORS.filter(function(v){return v!==n;});writeVendors();renderVendors();renderPartOrders();});}
+function renderVendors(){var el=document.getElementById('vendor-chips');if(!el)return;if(!VENDORS.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">No vendors yet — add your suppliers below.</div>';return;}el.innerHTML='';VENDORS.forEach(function(v){var chip=document.createElement('span');chip.className='tech-chip';chip.appendChild(document.createTextNode(v));var btn=document.createElement('button');btn.innerHTML='&#x2715;';btn.onclick=function(){removeVendor(v);};chip.appendChild(btn);el.appendChild(chip);});}
 function populateTechSels(){['m-tech','wo-tf'].forEach(function(id){var sel=document.getElementById(id);if(!sel)return;var cur=sel.value;sel.innerHTML=id==='m-tech'?'<option>Unassigned</option>':'<option value="">All Techs</option>';TECHS.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);});if(cur)sel.value=cur;});}
 function populateCustSel(){/* replaced by custSearch */}
 
@@ -1107,7 +1122,7 @@ function openDet(id){
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
     +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
     +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
-    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
+    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button><button class="btn amber" style="padding:6px 12px" onclick="openPartOrder(\'stihl\',\''+id+'\')">+ Stihl Part</button><button class="btn amber" style="padding:6px 12px" onclick="openPartOrder(\'other\',\''+id+'\')">+ Other Part</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
 
@@ -1421,7 +1436,7 @@ function checkAdminCode(){
     document.getElementById('admin-unlocked').style.display = 'block';
     document.getElementById('admin-code-input').value = '';
     msg.style.display = 'none';
-    renderTechs();
+    renderTechs();renderVendors();
   } else {
     msg.style.display = 'block';
     document.getElementById('admin-code-input').value = '';
@@ -1464,20 +1479,29 @@ function deletePart(woid,idx){
   o.parts=parts;writeOrder(o);openDet(woid);
 }
 var _poCategory=null;
-function openPartOrder(cat){
-  _poCategory=cat;
-  document.getElementById('po-mtitle').textContent='Add to '+(cat==='stihl'?'Stihl':'Other')+' Parts List';
+var _poWoid=null;
+function openPartOrder(cat,preWoid){
+  _poCategory=cat;_poWoid=preWoid||null;
+  var title='Add to '+(cat==='stihl'?'Stihl':'Other')+' Parts List';
   ['po-desc','po-equip','po-notes'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('po-qty').value='1';document.getElementById('po-paid').checked=false;
+  if(_poWoid&&ORDERS[_poWoid]){
+    var o=ORDERS[_poWoid],c=CUSTS[o.custId]||{};
+    title+=' — WO #'+o.woNum+' '+(c.first||'')+' '+(c.last||'');
+    var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
+    if(equip)document.getElementById('po-equip').value=equip;
+  }
+  document.getElementById('po-mtitle').textContent=title;
   document.getElementById('part-order-modal').classList.add('open');
 }
 function savePartOrder(){
   var desc=document.getElementById('po-desc').value.trim();
   if(!desc){alert('Enter a part description.');return;}
+  var woNum=_poWoid&&ORDERS[_poWoid]?ORDERS[_poWoid].woNum:null;
   var item={desc:desc,qty:parseInt(document.getElementById('po-qty').value)||1,
     equip:document.getElementById('po-equip').value.trim(),
     notes:document.getElementById('po-notes').value.trim(),
-    woId:null,woNum:null,
+    woId:_poWoid||null,woNum:woNum,vendor:'',
     ordered:false,received:false,paid:document.getElementById('po-paid').checked,added:today()};
   if(!PARTORDERS[_poCategory])PARTORDERS[_poCategory]=[];
   PARTORDERS[_poCategory].push(item);
@@ -1506,13 +1530,28 @@ function renderPartOrders(){
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
-      var woStatus=p.woId&&ORDERS[p.woId]?ORDERS[p.woId].status:'';
-      var woLabel=p.woNum?'WO #'+p.woNum+(woStatus?' &middot; '+woStatus:''):'';
       info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
         +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
-        +(woLabel?'<div style="font-size:11px;color:var(--red);font-weight:600;cursor:pointer" onclick="p.woId&&openDet(p.woId)">'+woLabel+'</div>':'')
         +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'');
-      var btns=document.createElement('div');btns.style.cssText='display:flex;gap:5px;flex-shrink:0';
+      if(p.woNum){
+        var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;
+        var wc=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
+        var woDiv=document.createElement('div');
+        woDiv.style.cssText='font-size:11px;color:var(--red);font-weight:600'+(wo?';cursor:pointer':'');
+        woDiv.textContent='For WO #'+p.woNum+((wc.first||wc.last)?' — '+(wc.first||'')+' '+(wc.last||''):'')+(wo&&wo.status?' · '+wo.status:'');
+        if(wo){woDiv.onclick=(function(woid){return function(){openDet(woid);};})(p.woId);}
+        info.insertBefore(woDiv,info.children[1]||null);
+      }
+      var btns=document.createElement('div');btns.style.cssText='display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;align-items:center';
+      var vSel=document.createElement('select');
+      vSel.style.cssText='padding:4px 6px;border:1.5px solid var(--silver);border-radius:3px;font-size:12px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark);max-width:120px';
+      var v0=document.createElement('option');v0.value='';v0.textContent='Vendor?';vSel.appendChild(v0);
+      VENDORS.forEach(function(v){var op=document.createElement('option');op.value=v;op.textContent=v;vSel.appendChild(op);});
+      if(p.vendor&&VENDORS.indexOf(p.vendor)<0){var vx=document.createElement('option');vx.value=p.vendor;vx.textContent=p.vendor;vSel.appendChild(vx);}
+      vSel.value=p.vendor||'';
+      if(!p.vendor)vSel.style.borderColor='#EF9F27';
+      vSel.onchange=(function(c,idx){return function(){PARTORDERS[c][idx].vendor=this.value;writePartOrders();renderPartOrders();};})(cat,i);
+      btns.appendChild(vSel);
       var bOrd=document.createElement('button');
       bOrd.className='btn sm'+(p.ordered?' primary':'');
       bOrd.textContent=p.ordered?'✓ Ordered':'Order';
@@ -1620,6 +1659,7 @@ function renderDaily(){
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off)';
     row.innerHTML='<strong>'+p.desc+'</strong>'+(p.qty>1?' ×'+p.qty:'')
+      +(p.vendor?'<span style="font-size:11px;color:var(--muted);margin-left:6px">from '+p.vendor+'</span>':'')
       +(wo?'<span style="font-size:12px;color:var(--muted);margin-left:8px">→ WO #'+wo.woNum+' '+(c.first||'')+' '+(c.last||'')+'</span>':'')
       +(p.paid?'<span class="b-paid" style="margin-left:6px">Paid</span>':'<span style="font-size:11px;color:var(--red);margin-left:6px;font-weight:600">$ Unpaid</span>');
     if(wo){row.style.cursor='pointer';row.onclick=function(){openDet(wo.id);};}
