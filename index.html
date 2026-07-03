@@ -349,6 +349,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <input type="text" id="po-q" placeholder="Search part #, customer, WO#, equipment, vendor..." oninput="renderPartOrders()">
       <button class="btn primary" onclick="openPartOrder('stihl')">+ Stihl Part</button>
       <button class="btn primary" onclick="openPartOrder('other')">+ Other Part</button>
+      <button class="btn" id="po-archive-btn" onclick="togglePOArchive()">Received ✓</button>
     </div>
     <div class="po-grid" id="po-cards" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start"></div>
   </div>
@@ -1513,13 +1514,23 @@ function savePartOrder(){
 function togglePOFlag(cat,idx,flag){
   if(!PARTORDERS[cat]||!PARTORDERS[cat][idx])return;
   PARTORDERS[cat][idx][flag]=!PARTORDERS[cat][idx][flag];
-  if(flag==='received'&&PARTORDERS[cat][idx].received)PARTORDERS[cat][idx].ordered=true;
+  if(flag==='received'){
+    if(PARTORDERS[cat][idx].received){PARTORDERS[cat][idx].ordered=true;PARTORDERS[cat][idx].receivedOn=today();}
+    else{PARTORDERS[cat][idx].receivedOn=null;}
+  }
   writePartOrders();renderPartOrders();
 }
 function deletePO(cat,idx){
   if(!confirm('Remove from list?'))return;
   PARTORDERS[cat].splice(idx,1);
   writePartOrders();renderPartOrders();
+}
+var _poShowArchive=false;
+function togglePOArchive(){
+  _poShowArchive=!_poShowArchive;
+  var b=document.getElementById('po-archive-btn');
+  if(b)b.classList.toggle('primary',_poShowArchive);
+  renderPartOrders();
 }
 function renderPartOrders(){
   var el=document.getElementById('po-cards');if(!el)return;
@@ -1541,6 +1552,20 @@ function renderPartOrders(){
     if(!matches.length){var none=document.createElement('div');none.className='empty';none.style.padding='10px 0';none.textContent='No parts match.';sCard.appendChild(none);}
     else{matches.forEach(function(it){sCard.appendChild(buildPORow(it.cat,it.i,it.p));});}
     el.appendChild(sCard);
+    return;
+  }
+  if(_poShowArchive){
+    // Received Archive — everything ever marked received, newest first
+    var rec=[];
+    ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.received)rec.push({cat:cat,i:i,p:p});});});
+    rec.sort(function(a,b){return (b.p.receivedOn||'').localeCompare(a.p.receivedOn||'');});
+    el.innerHTML='';
+    var aCard=document.createElement('div');aCard.className='card';aCard.style.cssText='grid-column:1/-1;margin-bottom:0';
+    var aHdr=document.createElement('div');aHdr.className='card-hdr';aHdr.textContent='Received Archive ('+rec.length+')';
+    aCard.appendChild(aHdr);
+    if(!rec.length){var aNone=document.createElement('div');aNone.className='empty';aNone.style.padding='10px 0';aNone.textContent='Nothing received yet.';aCard.appendChild(aNone);}
+    else{rec.forEach(function(it){aCard.appendChild(buildPORow(it.cat,it.i,it.p));});}
+    el.appendChild(aCard);
     return;
   }
   // Collect all pending parts across both categories, then render one card per vendor
@@ -1571,7 +1596,8 @@ function buildPORow(cat,i,p){
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
       info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
         +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
-        +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'');
+        +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'')
+        +(p.received&&p.receivedOn?'<div style="font-size:11px;color:#2d7d1e;font-weight:600">Received '+p.receivedOn+'</div>':'');
       if(p.woNum){
         var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;
         var wc=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
@@ -1637,7 +1663,8 @@ function renderDaily(){
   var overdue=open.filter(function(o){return o.estDate&&o.estDate<todayStr&&o.status!=='Ready'&&o.status!=='Picked Up';});
   var old=open.filter(function(o){if(!o.dateIn)return false;return Math.floor((now-new Date(o.dateIn))/(1000*60*60*24))>=SETTINGS.ageOldDays;});
   var partsIn=[];
-  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.received)partsIn.push({cat:cat,idx:i,p:p});});});
+  var poCut=new Date();poCut.setDate(poCut.getDate()-7);var poCutStr=poCut.toISOString().slice(0,10);
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.received&&p.receivedOn&&p.receivedOn>=poCutStr)partsIn.push({cat:cat,idx:i,p:p});});});
   var waiting=open.filter(function(o){return o.status==='Waiting on Parts';});
 
   el.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Pickup &amp; Report — '+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+'</div>';
@@ -1693,7 +1720,7 @@ function renderDaily(){
   var grid=document.createElement('div');grid.className='daily-grid';el.appendChild(grid);
 
   // Parts in
-  makeSection(grid,'Parts In / Received','',partsIn,function(item){
+  makeSection(grid,'Parts In / Received (last 7 days)','',partsIn,function(item){
     var p=item.p;var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;var c=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off)';
