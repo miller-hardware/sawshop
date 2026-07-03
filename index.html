@@ -1105,8 +1105,8 @@ function openDet(id){
     +'<div style="flex:2;min-width:120px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Part # / Description</div><input type="text" id="ql-note-'+id+'" placeholder="e.g. Air filter, Labor..." style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<div style="width:60px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Qty</div><input type="number" id="ql-qty-'+id+'" value="1" min="1" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<button class="btn sm primary" onclick="quickAddPart(\''+id+'\')" style="align-self:flex-end">+ Stock Part</button>'
-    +'<button class="btn sm amber" onclick="openPartOrder(\'stihl\',\''+id+'\')" style="align-self:flex-end">+ Stihl Part</button>'
-    +'<button class="btn sm amber" onclick="openPartOrder(\'other\',\''+id+'\')" style="align-self:flex-end">+ Other Part</button>'
+    +'<button class="btn sm amber" onclick="quickAddOrderPart(\''+id+'\',\'stihl\')" style="align-self:flex-end">+ Stihl Part</button>'
+    +'<button class="btn sm amber" onclick="quickAddOrderPart(\''+id+'\',\'other\')" style="align-self:flex-end">+ Other Part</button>'
     +'</div>'
     +'<div class="sect-lbl">Customer Contact Log</div>'+logHtml
     +'<button class="btn sm outline" onclick="openContactLog(\''+id+'\')" style="margin-top:8px">+ Log Contact</button>'
@@ -1453,6 +1453,26 @@ function quickAddPart(woid){
   document.getElementById('ql-qty-'+woid).value='1';
   openDet(woid);
 }
+function quickAddOrderPart(woid,cat){
+  // One tap: part goes on the WO's parts list AND onto the Parts to Order list, linked to this WO
+  var desc=document.getElementById('ql-note-'+woid).value.trim();
+  if(!desc){alert('Enter a description.');return;}
+  var qty=parseFloat(document.getElementById('ql-qty-'+woid).value)||1;
+  var o=ORDERS[woid];if(!o)return;
+  var parts=(o.parts||[]).slice();
+  parts.push({desc:desc,qty:qty,note:'On order'});
+  o.parts=parts;writeOrder(o);
+  var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
+  var item={desc:desc,qty:qty,equip:equip,notes:'',
+    woId:woid,woNum:o.woNum||null,vendor:'',
+    ordered:false,received:false,paid:false,added:today()};
+  if(!PARTORDERS[cat])PARTORDERS[cat]=[];
+  PARTORDERS[cat].push(item);
+  writePartOrders();renderPartOrders();
+  document.getElementById('ql-note-'+woid).value='';
+  document.getElementById('ql-qty-'+woid).value='1';
+  openDet(woid);
+}
 function quickAddNote(woid){
   var inp=document.getElementById('ql-gen-note-'+woid);
   var txt=(inp?inp.value:'').trim();
@@ -1470,29 +1490,20 @@ function deletePart(woid,idx){
   o.parts=parts;writeOrder(o);openDet(woid);
 }
 var _poCategory=null;
-var _poWoid=null;
-function openPartOrder(cat,preWoid){
-  _poCategory=cat;_poWoid=preWoid||null;
-  var title='Add to '+(cat==='stihl'?'Stihl':'Other')+' Parts List';
+function openPartOrder(cat){
+  _poCategory=cat;
+  document.getElementById('po-mtitle').textContent='Add to '+(cat==='stihl'?'Stihl':'Other')+' Parts List';
   ['po-desc','po-equip','po-notes'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('po-qty').value='1';document.getElementById('po-paid').checked=false;
-  if(_poWoid&&ORDERS[_poWoid]){
-    var o=ORDERS[_poWoid],c=CUSTS[o.custId]||{};
-    title+=' — WO #'+o.woNum+' '+(c.first||'')+' '+(c.last||'');
-    var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
-    if(equip)document.getElementById('po-equip').value=equip;
-  }
-  document.getElementById('po-mtitle').textContent=title;
   document.getElementById('part-order-modal').classList.add('open');
 }
 function savePartOrder(){
   var desc=document.getElementById('po-desc').value.trim();
   if(!desc){alert('Enter a part description.');return;}
-  var woNum=_poWoid&&ORDERS[_poWoid]?ORDERS[_poWoid].woNum:null;
   var item={desc:desc,qty:parseInt(document.getElementById('po-qty').value)||1,
     equip:document.getElementById('po-equip').value.trim(),
     notes:document.getElementById('po-notes').value.trim(),
-    woId:_poWoid||null,woNum:woNum,vendor:'',
+    woId:null,woNum:null,vendor:'',
     ordered:false,received:false,paid:document.getElementById('po-paid').checked,added:today()};
   if(!PARTORDERS[_poCategory])PARTORDERS[_poCategory]=[];
   PARTORDERS[_poCategory].push(item);
