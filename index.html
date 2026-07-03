@@ -2,6 +2,8 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-storage-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -658,7 +660,8 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 <div class="modal-bg" id="part-order-modal" style="z-index:230">
 <div class="modal">
   <div class="modal-title" id="po-mtitle">Add Part to Order</div>
-  <div class="f"><label>Part # / Description</label><input type="text" id="po-desc" placeholder="e.g. 1141 120 1603, Carburetor kit"></div>
+  <div class="f"><label>Part #</label><input type="text" id="po-pn" placeholder="e.g. 1141 120 1603 (optional)"></div>
+  <div class="f"><label>Description</label><input type="text" id="po-desc" placeholder="e.g. Carburetor kit"></div>
   <div class="f"><label>Qty</label><input type="number" id="po-qty" value="1" min="1" style="max-width:140px"></div>
   <div class="f"><label>For Equipment</label><input type="text" id="po-equip" placeholder="e.g. Stihl MS 271 (optional)"></div>
   <div class="f"><label>Notes</label><input type="text" id="po-notes" placeholder="e.g. Customer approved, ordered 4/10"></div>
@@ -1083,7 +1086,7 @@ function newWOForCustEquip(cid,eqIdx){
 
 function openDet(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
-  var prows=(o.parts||[]).map(function(p,pi){return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--off)">'+p.desc+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);text-align:center">'+p.qty+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);color:var(--gray2)">'+(p.note||'')+'</td><td style="padding:3px 4px;border-bottom:1px solid var(--off)"><button onclick="deletePart(\''+id+'\','+pi+')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:2px 5px;font-weight:700">&#x2715;</button></td></tr>';}).join('');
+  var prows=(o.parts||[]).map(function(p,pi){return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--off);font-family:monospace;font-size:11px;color:var(--gray2)">'+(p.pn||'')+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off)">'+p.desc+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);text-align:center">'+p.qty+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);color:var(--gray2)">'+(p.note||'')+'</td><td style="padding:3px 4px;border-bottom:1px solid var(--off)"><button onclick="deletePart(\''+id+'\','+pi+')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:2px 5px;font-weight:700">&#x2715;</button></td></tr>';}).join('');
   var stats=['Intake','Diagnosing','In Repair','Waiting on Parts','Ready','Picked Up'];
   var sbtns=stats.map(function(s){var isW=s==='Waiting on Parts';return '<button class="sbtn'+(isW?' waiting-btn':'')+(o.status===s?' active':'')+'" onclick="quickStatus(\''+id+'\',\''+s+'\')">'+s+'</button>';}).join('');
   var eqf=[['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];});
@@ -1105,9 +1108,10 @@ function openDet(id){
     +'<button class="btn sm primary" onclick="quickAddNote(\''+id+'\')" style="align-self:flex-end">+ Add Note</button>'
     +'</div>'
     +'<hr>'
-    +(o.parts&&o.parts.length?'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Description</th><th style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Qty</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Notes</th></tr></thead><tbody>'+prows+'</tbody></table>':'<div style="font-size:12px;color:var(--muted);padding:6px 0;font-style:italic">No parts or labor logged.</div>')
+    +(o.parts&&o.parts.length?'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Part #</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Description</th><th style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Qty</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Notes</th></tr></thead><tbody>'+prows+'</tbody></table>':'<div style="font-size:12px;color:var(--muted);padding:6px 0;font-style:italic">No parts or labor logged.</div>')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-top:6px">'
-    +'<div style="flex:2;min-width:120px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Part # / Description</div><input type="text" id="ql-note-'+id+'" placeholder="e.g. Air filter, Labor..." style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
+    +'<div style="width:96px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Part #</div><input type="text" id="ql-pn-'+id+'" placeholder="optional" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
+    +'<div style="flex:2;min-width:120px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Description</div><input type="text" id="ql-note-'+id+'" placeholder="e.g. Air filter, Labor..." style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<div style="width:60px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Qty</div><input type="number" id="ql-qty-'+id+'" value="1" min="1" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<button class="btn sm primary" onclick="quickAddPart(\''+id+'\')" style="align-self:flex-end">+ Stock Part</button>'
     +'<button class="btn sm amber" onclick="quickAddOrderPart(\''+id+'\',\'stihl\')" style="align-self:flex-end">+ Stihl Part</button>'
@@ -1118,7 +1122,7 @@ function openDet(id){
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
     +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
     +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
-    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button></div>';
+    +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button><button class="btn" onclick="downloadInvoice(\''+id+'\')">&#x2B07; Download Invoice</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
 
@@ -1201,7 +1205,7 @@ function printWO(id){
   var existParts=(o.parts||[]).length;
   var prows=(o.parts||[]).map(function(p){
     return '<tr>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc">'+p.desc+(p.note?' <span style="color:#888;font-size:10px">('+p.note+')</span>':'')+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc">'+(p.pn?'<strong>'+p.pn+'</strong> — ':'')+p.desc+(p.note?' <span style="color:#888;font-size:10px">('+p.note+')</span>':'')+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center"></td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+p.qty+'</td>'
       +'</tr>';
@@ -1446,13 +1450,57 @@ function lockAdmin(){
 }
 
 document.querySelectorAll('.modal-bg').forEach(function(el){el.addEventListener('click',function(e){if(e.target===el)el.classList.remove('open');});});
+function downloadInvoice(id){
+  var o=ORDERS[id];if(!o)return;
+  if(!(window.jspdf&&window.jspdf.jsPDF)){alert('PDF tool is still loading — give it a second and tap Download again.');return;}
+  var parts=(o.parts||[]);
+  if(!parts.length){alert('No parts on this work order yet — add parts before downloading an invoice.');return;}
+  var c=CUSTS[o.custId]||{};
+  var isHarrison=o.location==='Harrison';
+  var shopAddr=isHarrison?'#2 Necessity Ave, Harrison, AR 72601':'1609 Hwy 62 West, Yellville, AR 72687';
+  var shopPhone=isHarrison?'(870) 741-3493':'(870) 449-4255';
+  var custName=((c.first||'')+' '+(c.last||'')).trim();
+  var equipLine=[o.brand,o.equipType,o.model?'Model '+o.model:'',o.serial?'SN '+o.serial:''].filter(Boolean).join('   ·   ');
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({unit:'pt',format:'letter'});
+  var M=54,y=58;
+  doc.setFont('helvetica','bold');doc.setFontSize(16);
+  doc.text('MILLER HARDWARE COMPANY, INC.',M,y);
+  y+=15;
+  doc.setFont('helvetica','normal');doc.setFontSize(10);
+  doc.text(shopAddr+'    ·    '+shopPhone,M,y);
+  y+=32;
+  doc.setFont('helvetica','bold');doc.setFontSize(13);
+  doc.text('PARTS INVOICE',M,y);
+  y+=20;
+  doc.setFontSize(10);
+  var ref=[['Invoice / Ref #','WO-'+(o.woNum||'')],['Date',today()],['Customer',custName||'—']];
+  if(equipLine)ref.push(['Equipment',equipLine]);
+  ref.forEach(function(r){doc.setFont('helvetica','bold');doc.text(r[0]+':',M,y);doc.setFont('helvetica','normal');doc.text(String(r[1]),M+100,y);y+=15;});
+  y+=10;
+  var body=parts.map(function(p){return [p.pn||'',p.desc||'',String(p.qty||'')];});
+  doc.autoTable({
+    startY:y,margin:{left:M,right:M},
+    head:[['Part #','Description','Qty']],
+    body:body,
+    theme:'grid',
+    styles:{font:'helvetica',fontSize:10,cellPadding:6,lineColor:[200,200,200],lineWidth:0.5,textColor:[26,26,26]},
+    headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
+    columnStyles:{0:{cellWidth:120},2:{cellWidth:50,halign:'center'}}
+  });
+  var endY=(doc.lastAutoTable&&doc.lastAutoTable.finalY)||y;
+  doc.setFontSize(9);doc.setTextColor(130);
+  doc.text('Parts list for quote generation — prices set by point of sale.',M,endY+22);
+  doc.save('Miller-Parts-Invoice-WO'+(o.woNum||'')+'.pdf');
+}
 function quickAddPart(woid){
   var desc=document.getElementById('ql-note-'+woid).value.trim();
   if(!desc){alert('Enter a description.');return;}
   var qty=parseFloat(document.getElementById('ql-qty-'+woid).value)||1;
   var o=ORDERS[woid];if(!o)return;
+  var pn=(document.getElementById('ql-pn-'+woid)||{}).value;pn=pn?pn.trim():'';
   var parts=(o.parts||[]).slice();
-  parts.push({desc:desc,qty:qty,note:''});
+  parts.push({pn:pn,desc:desc,qty:qty,note:''});
   o.parts=parts;writeOrder(o);
   document.getElementById('ql-note-'+woid).value='';
   document.getElementById('ql-qty-'+woid).value='1';
@@ -1464,11 +1512,12 @@ function quickAddOrderPart(woid,cat){
   if(!desc){alert('Enter a description.');return;}
   var qty=parseFloat(document.getElementById('ql-qty-'+woid).value)||1;
   var o=ORDERS[woid];if(!o)return;
+  var pn=(document.getElementById('ql-pn-'+woid)||{}).value;pn=pn?pn.trim():'';
   var parts=(o.parts||[]).slice();
-  parts.push({desc:desc,qty:qty,note:'On order'});
+  parts.push({pn:pn,desc:desc,qty:qty,note:'On order'});
   o.parts=parts;writeOrder(o);
   var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
-  var item={desc:desc,qty:qty,equip:equip,notes:'',
+  var item={pn:pn,desc:desc,qty:qty,equip:equip,notes:'',
     woId:woid,woNum:o.woNum||null,vendor:cat==='stihl'?'Stihl':'',
     ordered:false,received:false,paid:false,added:today()};
   if(!PARTORDERS[cat])PARTORDERS[cat]=[];
@@ -1498,14 +1547,15 @@ var _poCategory=null;
 function openPartOrder(cat){
   _poCategory=cat;
   document.getElementById('po-mtitle').textContent='Add to '+(cat==='stihl'?'Stihl':'Other')+' Parts List';
-  ['po-desc','po-equip','po-notes'].forEach(function(id){document.getElementById(id).value='';});
+  ['po-pn','po-desc','po-equip','po-notes'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('po-qty').value='1';document.getElementById('po-paid').checked=false;
   document.getElementById('part-order-modal').classList.add('open');
 }
 function savePartOrder(){
   var desc=document.getElementById('po-desc').value.trim();
+  var pn=document.getElementById('po-pn').value.trim();
   if(!desc){alert('Enter a part description.');return;}
-  var item={desc:desc,qty:parseInt(document.getElementById('po-qty').value)||1,
+  var item={pn:pn,desc:desc,qty:parseInt(document.getElementById('po-qty').value)||1,
     equip:document.getElementById('po-equip').value.trim(),
     notes:document.getElementById('po-notes').value.trim(),
     woId:null,woNum:null,vendor:_poCategory==='stihl'?'Stihl':'',
@@ -1544,7 +1594,7 @@ function renderPartOrders(){
     ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){
       var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;
       var c=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
-      var txt=((p.desc||'')+' '+(p.equip||'')+' '+(p.notes||'')+' '+(p.vendor||'')+' '+(p.woNum||'')+' '+(c.first||'')+' '+(c.last||'')).toLowerCase();
+      var txt=((p.pn||'')+' '+(p.desc||'')+' '+(p.equip||'')+' '+(p.notes||'')+' '+(p.vendor||'')+' '+(p.woNum||'')+' '+(c.first||'')+' '+(c.last||'')).toLowerCase();
       if(txt.indexOf(q)>=0)matches.push({cat:cat,i:i,p:p});
     });});
     el.innerHTML='';
@@ -1597,7 +1647,7 @@ function buildPORow(cat,i,p){
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       if(p.received)row.style.opacity='0.65';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
-      info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
+      info.innerHTML='<div style="font-size:13px;font-weight:600">'+(p.pn?'<span style="font-family:monospace;color:var(--gray2);font-weight:700">'+p.pn+'</span> &nbsp;':'')+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
         +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
         +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'')
         +(p.received&&p.receivedOn?'<div style="font-size:11px;color:#2d7d1e;font-weight:600">Received '+p.receivedOn+'</div>':'');
