@@ -344,23 +344,12 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
 
   <div class="view" id="tab-parts">
-    <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Parts to Order &mdash; standalone shopping list</div>
-    <div class="po-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <div class="card">
-        <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-          Stihl Parts to Order
-          <button class="btn sm primary" onclick="openPartOrder('stihl')">+ Add</button>
-        </div>
-        <div id="po-stihl-list"><div class="empty" style="padding:10px 0">None pending</div></div>
-      </div>
-      <div class="card">
-        <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-          Other Parts to Order
-          <button class="btn sm primary" onclick="openPartOrder('other')">+ Add</button>
-        </div>
-        <div id="po-other-list"><div class="empty" style="padding:10px 0">None pending</div></div>
-      </div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Parts to Order &mdash; organized by vendor</div>
+    <div class="srow">
+      <button class="btn primary" onclick="openPartOrder('stihl')">+ Stihl Part</button>
+      <button class="btn primary" onclick="openPartOrder('other')">+ Other Part</button>
     </div>
+    <div class="po-grid" id="po-cards" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start"></div>
   </div>
 
   <div class="view" id="tab-settings">
@@ -1521,30 +1510,32 @@ function deletePO(cat,idx){
   writePartOrders();renderPartOrders();
 }
 function renderPartOrders(){
-  ['stihl','other'].forEach(function(cat){
-    var el=document.getElementById('po-'+cat+'-list');if(!el)return;
-    var list=PARTORDERS[cat]||[];
-    var pending=[];
-    list.forEach(function(p,i){if(!p.received)pending.push({p:p,i:i});});
-    if(!pending.length){el.innerHTML='<div class="empty" style="padding:10px 0">None pending</div>';return;}
-    el.innerHTML='';
-    // Group pending parts by vendor: "needs vendor" bucket first, then vendors in admin-list order
-    var groups={};
-    pending.forEach(function(it){var v=it.p.vendor||'';if(!groups[v])groups[v]=[];groups[v].push(it);});
-    var vOrder=[''].concat(VENDORS.slice());
-    Object.keys(groups).forEach(function(v){if(vOrder.indexOf(v)<0)vOrder.push(v);});
-    vOrder.forEach(function(v){
-      var items=groups[v];if(!items||!items.length)return;
-      var ghdr=document.createElement('div');
-      ghdr.style.cssText='font-family:"Barlow Condensed",sans-serif;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:10px 0 3px;color:'+(v?'var(--dark)':'#BA7517');
-      ghdr.textContent=(v||'⚠ Needs vendor')+' ('+items.length+')';
-      el.appendChild(ghdr);
-      items.forEach(function(it){
-      var p=it.p,i=it.i;
+  var el=document.getElementById('po-cards');if(!el)return;
+  // Collect all pending parts across both categories, then render one card per vendor
+  var pending=[];
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(!p.received)pending.push({cat:cat,i:i,p:p});});});
+  if(!pending.length){el.innerHTML='<div class="empty" style="grid-column:1/-1;padding:16px 0">No parts to order.</div>';return;}
+  el.innerHTML='';
+  var groups={};
+  pending.forEach(function(it){var v=it.p.vendor||'';if(!groups[v])groups[v]=[];groups[v].push(it);});
+  var vOrder=[''].concat(VENDORS.slice());
+  Object.keys(groups).forEach(function(v){if(vOrder.indexOf(v)<0)vOrder.push(v);});
+  vOrder.forEach(function(v){
+    var items=groups[v];if(!items||!items.length)return;
+    var card=document.createElement('div');card.className='card';card.style.marginBottom='0';
+    var hdr=document.createElement('div');hdr.className='card-hdr';
+    if(!v)hdr.style.color='#BA7517';
+    hdr.textContent=(v||'⚠ Needs Vendor')+' ('+items.length+')';
+    card.appendChild(hdr);
+    items.forEach(function(it){card.appendChild(buildPORow(it.cat,it.i,it.p));});
+    el.appendChild(card);
+  });
+}
+function buildPORow(cat,i,p){
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
-      info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
+      info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+' <span style="font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:'+(cat==='stihl'?'var(--red)':'var(--muted)')+'">'+(cat==='stihl'?'Stihl':'Other')+'</span></div>'
         +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
         +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'');
       if(p.woNum){
@@ -1583,10 +1574,7 @@ function renderPartOrders(){
       bDel.onclick=(function(c,idx){return function(){deletePO(c,idx);};})(cat,i);
       btns.appendChild(bOrd);btns.appendChild(bRec);btns.appendChild(bPaid);btns.appendChild(bDel);
       row.appendChild(info);row.appendChild(btns);
-      el.appendChild(row);
-      });
-    });
-  });
+      return row;
 }
 var SETTINGS={ageWarnDays:7,ageOldDays:14};
 
