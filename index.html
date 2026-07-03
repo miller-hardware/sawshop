@@ -1464,7 +1464,7 @@ function quickAddOrderPart(woid,cat){
   o.parts=parts;writeOrder(o);
   var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
   var item={desc:desc,qty:qty,equip:equip,notes:'',
-    woId:woid,woNum:o.woNum||null,vendor:'',
+    woId:woid,woNum:o.woNum||null,vendor:cat==='stihl'?'Stihl':'',
     ordered:false,received:false,paid:false,added:today()};
   if(!PARTORDERS[cat])PARTORDERS[cat]=[];
   PARTORDERS[cat].push(item);
@@ -1503,7 +1503,7 @@ function savePartOrder(){
   var item={desc:desc,qty:parseInt(document.getElementById('po-qty').value)||1,
     equip:document.getElementById('po-equip').value.trim(),
     notes:document.getElementById('po-notes').value.trim(),
-    woId:null,woNum:null,vendor:'',
+    woId:null,woNum:null,vendor:_poCategory==='stihl'?'Stihl':'',
     ordered:false,received:false,paid:document.getElementById('po-paid').checked,added:today()};
   if(!PARTORDERS[_poCategory])PARTORDERS[_poCategory]=[];
   PARTORDERS[_poCategory].push(item);
@@ -1528,8 +1528,9 @@ function renderPartOrders(){
   if(!pending.length){el.innerHTML='<div class="empty" style="grid-column:1/-1;padding:16px 0">No parts to order.</div>';return;}
   el.innerHTML='';
   var groups={};
-  pending.forEach(function(it){var v=it.p.vendor||'';if(!groups[v])groups[v]=[];groups[v].push(it);});
-  var vOrder=[''].concat(VENDORS.slice());
+  // Stihl parts always group under "Stihl" — single-source, no vendor choice needed
+  pending.forEach(function(it){var v=it.cat==='stihl'?'Stihl':(it.p.vendor||'');if(!groups[v])groups[v]=[];groups[v].push(it);});
+  var vOrder=['','Stihl'].concat(VENDORS.filter(function(v){return v!=='Stihl';}));
   Object.keys(groups).forEach(function(v){if(vOrder.indexOf(v)<0)vOrder.push(v);});
   vOrder.forEach(function(v){
     var items=groups[v];if(!items||!items.length)return;
@@ -1546,7 +1547,7 @@ function buildPORow(cat,i,p){
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
-      info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+' <span style="font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:'+(cat==='stihl'?'var(--red)':'var(--muted)')+'">'+(cat==='stihl'?'Stihl':'Other')+'</span></div>'
+      info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
         +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
         +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'');
       if(p.woNum){
@@ -1559,15 +1560,18 @@ function buildPORow(cat,i,p){
         info.insertBefore(woDiv,info.children[1]||null);
       }
       var btns=document.createElement('div');btns.style.cssText='display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;align-items:center';
-      var vSel=document.createElement('select');
-      vSel.style.cssText='padding:4px 6px;border:1.5px solid var(--silver);border-radius:3px;font-size:12px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark);max-width:120px';
-      var v0=document.createElement('option');v0.value='';v0.textContent='Vendor?';vSel.appendChild(v0);
-      VENDORS.forEach(function(v){var op=document.createElement('option');op.value=v;op.textContent=v;vSel.appendChild(op);});
-      if(p.vendor&&VENDORS.indexOf(p.vendor)<0){var vx=document.createElement('option');vx.value=p.vendor;vx.textContent=p.vendor;vSel.appendChild(vx);}
-      vSel.value=p.vendor||'';
-      if(!p.vendor)vSel.style.borderColor='#EF9F27';
-      vSel.onchange=(function(c,idx){return function(){PARTORDERS[c][idx].vendor=this.value;writePartOrders();renderPartOrders();};})(cat,i);
-      btns.appendChild(vSel);
+      if(cat!=='stihl'){
+        // Only "Other" parts pick a vendor — Stihl parts have exactly one source
+        var vSel=document.createElement('select');
+        vSel.style.cssText='padding:4px 6px;border:1.5px solid var(--silver);border-radius:3px;font-size:12px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark);max-width:120px';
+        var v0=document.createElement('option');v0.value='';v0.textContent='Vendor?';vSel.appendChild(v0);
+        VENDORS.forEach(function(v){var op=document.createElement('option');op.value=v;op.textContent=v;vSel.appendChild(op);});
+        if(p.vendor&&VENDORS.indexOf(p.vendor)<0){var vx=document.createElement('option');vx.value=p.vendor;vx.textContent=p.vendor;vSel.appendChild(vx);}
+        vSel.value=p.vendor||'';
+        if(!p.vendor)vSel.style.borderColor='#EF9F27';
+        vSel.onchange=(function(c,idx){return function(){PARTORDERS[c][idx].vendor=this.value;writePartOrders();renderPartOrders();};})(cat,i);
+        btns.appendChild(vSel);
+      }
       var bOrd=document.createElement('button');
       bOrd.className='btn sm'+(p.ordered?' primary':'');
       bOrd.textContent=p.ordered?'✓ Ordered':'Order';
