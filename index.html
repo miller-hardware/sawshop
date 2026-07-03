@@ -346,6 +346,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <div class="view" id="tab-parts">
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Parts to Order &mdash; organized by vendor</div>
     <div class="srow">
+      <input type="text" id="po-q" placeholder="Search part #, customer, WO#, equipment, vendor..." oninput="renderPartOrders()">
       <button class="btn primary" onclick="openPartOrder('stihl')">+ Stihl Part</button>
       <button class="btn primary" onclick="openPartOrder('other')">+ Other Part</button>
     </div>
@@ -1522,6 +1523,26 @@ function deletePO(cat,idx){
 }
 function renderPartOrders(){
   var el=document.getElementById('po-cards');if(!el)return;
+  var q=((document.getElementById('po-q')||{}).value||'').toLowerCase().trim();
+  if(q){
+    // Search ALL parts (pending + received) across both categories — matches part, equip, notes, vendor, WO#, customer
+    var matches=[];
+    ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){
+      var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;
+      var c=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
+      var txt=((p.desc||'')+' '+(p.equip||'')+' '+(p.notes||'')+' '+(p.vendor||'')+' '+(p.woNum||'')+' '+(c.first||'')+' '+(c.last||'')).toLowerCase();
+      if(txt.indexOf(q)>=0)matches.push({cat:cat,i:i,p:p});
+    });});
+    el.innerHTML='';
+    var sCard=document.createElement('div');sCard.className='card';sCard.style.cssText='grid-column:1/-1;margin-bottom:0';
+    var sHdr=document.createElement('div');sHdr.className='card-hdr';
+    sHdr.textContent='Search Results ('+matches.length+') — includes received parts';
+    sCard.appendChild(sHdr);
+    if(!matches.length){var none=document.createElement('div');none.className='empty';none.style.padding='10px 0';none.textContent='No parts match.';sCard.appendChild(none);}
+    else{matches.forEach(function(it){sCard.appendChild(buildPORow(it.cat,it.i,it.p));});}
+    el.appendChild(sCard);
+    return;
+  }
   // Collect all pending parts across both categories, then render one card per vendor
   var pending=[];
   ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(!p.received)pending.push({cat:cat,i:i,p:p});});});
@@ -1546,6 +1567,7 @@ function renderPartOrders(){
 function buildPORow(cat,i,p){
       var row=document.createElement('div');
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
+      if(p.received)row.style.opacity='0.65';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
       info.innerHTML='<div style="font-size:13px;font-weight:600">'+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
         +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
