@@ -9,6 +9,11 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta name="theme-color" content="#CC0000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Saw Shop">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -485,6 +490,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
             <span id="m-cust-selected-label" style="font-weight:600"></span>
             <button type="button" onclick="custClear()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:15px;font-weight:700;padding:0 2px">&#x2715;</button>
           </div>
+          <div id="repeat-intel" style="display:none;margin-top:6px"></div>
         </div>
         <button class="btn sm" onclick="openNewCustFromWO()" style="white-space:nowrap;flex-shrink:0;margin-top:1px">+ New</button>
       </div>
@@ -555,7 +561,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <option>Waiting on Parts</option><option>Ready</option><option>Picked Up</option>
       </select>
     </div>
-    <div class="f"><label>Est. Completion</label><input type="date" id="m-estdate"></div>
+    <div class="f"><label>Est. Completion</label><input type="date" id="m-estdate"><div id="est-suggest" style="font-size:12px;margin-top:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div></div>
     <div class="f"><label>Date Completed</label><input type="date" id="m-dateout"></div>
   </div>
   </div><!-- /RIGHT column -->
@@ -847,7 +853,9 @@ function renderReminders(){
   var el=document.getElementById('reminders-list');
   if(!el)return;
   if(!filtered.length){el.innerHTML='<div class="empty">No reminders right now — you\'re all caught up.</div>';return;}
-  el.innerHTML=filtered.map(function(r){
+  var withPhone=filtered.filter(function(r){return r.phone;}).length;
+  var summary='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:9px 12px;margin-bottom:10px"><div style="font-size:13px;color:var(--gray2)"><strong>'+filtered.length+'</strong> reminder'+(filtered.length!==1?'s':'')+' &middot; <strong>'+withPhone+'</strong> with a phone number</div><div style="font-size:11px;color:var(--muted)">Tap the Text button on each to send a reminder</div></div>';
+  el.innerHTML=summary+filtered.map(function(r){
     var icon=r.type==='overdue'?'!':r.type==='due-soon'?'~':r.type==='seasonal'?'S':'W';
     var iconColor=r.type==='overdue'?'var(--red)':r.type==='due-soon'?'#BA7517':r.type==='seasonal'?'#7F77DD':'#2d7d1e';
     return '<div class="reminder-row '+r.type+'">'
@@ -858,10 +866,28 @@ function renderReminders(){
       +'<div class="reminder-detail" style="color:'+(r.type==='overdue'?'var(--red)':r.type==='due-soon'?'#BA7517':'var(--gray2)')+'">'+r.detail+'</div>'
       +(r.lastSvc?'<div class="reminder-meta">Last service: '+r.lastSvc+'</div>':'')
       +'<div class="reminder-actions">'
+      +(r.phone?'<button class="btn sm success" onclick="textReminder(\''+r.custId+'\','+r.eqIdx+',\''+r.type+'\')">&#128227; Text Reminder</button>':'')
       +'<button class="btn sm primary" onclick="closeM(\'det-modal\');openCustDet(\''+r.custId+'\')">View Customer</button>'
       +'<button class="btn sm" onclick="newWOForCustEquip(\''+r.custId+'\','+r.eqIdx+')">+ Work Order</button>'
       +'</div></div></div>';
   }).join('');
+}
+function textReminder(custId,eqIdx,type){
+  var c=CUSTS[custId];if(!c){alert('Customer not found.');return;}
+  if(!c.phone){alert('No phone number on file for this customer.');return;}
+  var eq=custEquip(custId)[eqIdx]||{};
+  var equipName=[eq.brand,eq.type].filter(Boolean).join(' ')||'equipment';
+  var shopPhone='(870) 449-5234';
+  var first=c.first||'there';
+  var msg;
+  if(type==='warranty'){
+    msg='Hi '+first+', this is Miller Hardware. A heads-up that the warranty on your '+equipName+' is coming up soon. Questions? Give us a call at '+shopPhone+'.';
+  } else {
+    var season=getSeason().name;
+    msg='Hi '+first+', it\'s '+season+' service season at Miller Hardware! Your '+equipName+' is due for a tune-up. Beat the rush — call us at '+shopPhone+' to get it scheduled.';
+  }
+  var phone=(c.phone||'').replace(/\D/g,'');
+  var a=document.createElement('a');a.href='sms:'+phone+'?body='+encodeURIComponent(msg);a.click();
 }
 
 function loadLocal(){
@@ -1026,6 +1052,54 @@ function renderCustomers(){
   el.innerHTML=list.map(function(c){var wos=orderArr().filter(function(o){return o.custId===c.id;}),open=wos.filter(function(o){return o.status!=='Picked Up';}).length,eq=custEquip(c.id);return '<div class="card" style="cursor:pointer" onclick="openCustDet(\''+c.id+'\')">'+'<div style="display:flex;align-items:center;justify-content:space-between"><div><strong style="font-size:14px;font-weight:700">'+c.first+' '+c.last+'</strong>'+(c.phone?'<span style="margin-left:10px;font-size:12px;color:var(--muted)">'+c.phone+'</span>':'')+'</div>'+'<div style="font-size:12px;color:var(--muted)">'+wos.length+' order'+(wos.length!==1?'s':'')+(open?' &middot; <strong style="color:var(--red)">'+open+' open</strong>':'')+(eq.length?' &middot; '+eq.length+' unit'+(eq.length!==1?'s':''):'')+'</div></div>'+(c.notes?'<div style="font-size:12px;color:var(--gray2);margin-top:3px">'+c.notes+'</div>':'')+(eq.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+eq.slice(0,3).map(function(e){return(e.brand||'')+(e.model?' '+e.model:'');}).join(' &middot; ')+(eq.length>3?' +more':'')+'</div>':'')+'</div>';}).join('');
 }
 
+// ── Smart promise date: suggests Est. Completion from recent turnaround + load ──
+function computeSuggestedEst(){
+  var WINDOW=90,now=new Date(),cutoff=new Date(now.getTime()-WINDOW*86400000);
+  var turns=[],openJobs=0;
+  Object.keys(ORDERS).forEach(function(k){
+    var o=ORDERS[k];
+    if(o.status!=='Picked Up')openJobs++;
+    if(!o.dateIn||!o.dateOut)return;
+    var din=new Date(o.dateIn),dout=new Date(o.dateOut);
+    if(isNaN(din.getTime())||isNaN(dout.getTime()))return;
+    if(dout<cutoff)return;                       // only recently-completed jobs (rolling window)
+    var days=Math.round((dout-din)/86400000);
+    if(days<0||days>180)return;                  // drop bad/outlier data
+    turns.push(days);
+  });
+  var res={sampleN:turns.length,openJobs:openJobs,window:WINDOW};
+  if(turns.length<5){res.days=7;res.basis='default';}
+  else{
+    turns.sort(function(a,b){return a-b;});
+    var mid=Math.floor(turns.length/2);
+    var median=turns.length%2?turns[mid]:Math.round((turns[mid-1]+turns[mid])/2);
+    var throughput=turns.length/WINDOW;                       // jobs finished per day, recently
+    var expectedWIP=Math.max(1,throughput*median);            // Little's Law: normal backlog for this flow
+    var loadFactor=Math.max(0.85,Math.min(1.5,openJobs/expectedWIP)); // stretch when busier than normal, bounded
+    res.median=median;res.loadFactor=Math.round(loadFactor*100)/100;
+    res.days=Math.max(2,Math.round(median*loadFactor));
+    res.basis='data';
+  }
+  var d=new Date(now.getTime()+res.days*86400000);
+  res.iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  res.human=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  return res;
+}
+function renderEstSuggest(){
+  var el=document.getElementById('est-suggest');if(!el)return;
+  var s=computeSuggestedEst();
+  var basis=s.basis==='data'
+    ?'Based on your last '+s.window+' days (~'+s.median+'-day typical turnaround, '+s.openJobs+' jobs open now)'
+    :'Not enough recent history yet — using a 7-day default';
+  el.innerHTML='<span style="color:var(--gray2)">Suggested: <strong>'+s.human+'</strong> &middot; '+s.days+' day'+(s.days!==1?'s':'')+'</span>'
+    +'<button type="button" class="btn sm outline" style="padding:2px 9px;font-size:11px" onclick="useSuggestedEst()">Use</button>'
+    +'<div style="font-size:10px;color:var(--muted);flex-basis:100%;margin-top:1px">'+basis+'</div>';
+  el.setAttribute('data-iso',s.iso);
+}
+function useSuggestedEst(){
+  var el=document.getElementById('est-suggest');
+  if(el&&el.getAttribute('data-iso'))document.getElementById('m-estdate').value=el.getAttribute('data-iso');
+}
 function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
@@ -1035,6 +1109,7 @@ function openNewWO(){
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
   document.getElementById('m-urg').checked=false;document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
   document.getElementById('pt-body').innerHTML='';document.getElementById('waiting-parts-row').style.display='none';
+  renderEstSuggest();
   document.getElementById('wo-modal').classList.add('open');
 }
 function openEditWO(id){
@@ -1055,7 +1130,7 @@ function openEditWO(id){
   document.getElementById('m-location').value=o.location||'Yellville';
   document.getElementById('waiting-parts-row').style.display=o.status==='Waiting on Parts'?'block':'none';
   var pb=document.getElementById('pt-body');pb.innerHTML='';(o.parts||[]).forEach(function(p){appPR(p);});
-  closeM('det-modal');document.getElementById('wo-modal').classList.add('open');
+  closeM('det-modal');renderEstSuggest();document.getElementById('wo-modal').classList.add('open');
 }
 function quickStatus(id,s){var o=ORDERS[id];if(!o)return;o.status=s;if(s!=='Waiting on Parts')o.partsWaiting='';writeOrder(o);openDet(id);}
 
@@ -1437,6 +1512,7 @@ function custSelect(cid){
   document.getElementById('m-cust-results').style.display='none';
   document.getElementById('m-cust-selected-label').textContent=c.first+' '+c.last+(c.phone?' — '+c.phone:'');
   document.getElementById('m-cust-selected').style.display='flex';
+  renderRepeatIntel(cid);
 }
 function custClear(){
   document.getElementById('m-cust').value='';
@@ -1444,6 +1520,42 @@ function custClear(){
   document.getElementById('m-cust-results').style.display='none';
   document.getElementById('m-cust-selected').style.display='none';
   document.getElementById('m-cust-selected-label').textContent='';
+  renderRepeatIntel('');
+}
+// ── Repeat-repair intelligence: flash a customer's history at intake ──────
+function computeRepeatIntel(custId){
+  var now=new Date(),prior=[];
+  Object.keys(ORDERS).forEach(function(k){
+    var o=ORDERS[k];
+    if(o.custId!==custId)return;
+    if(editWOid&&k===editWOid)return;            // exclude the WO being edited
+    prior.push(o);
+  });
+  prior.sort(function(a,b){return (b.dateIn||'').localeCompare(a.dateIn||'');});
+  var last12=prior.filter(function(o){if(!o.dateIn)return false;var d=new Date(o.dateIn);return !isNaN(d.getTime())&&(now-d)<=365*86400000;}).length;
+  var ITEMS=[['Carburetor',/\bcarb(uretor)?\b/i],['Fuel line',/fuel\s*line/i],['Spark plug',/spark\s*plug/i],['Recoil/Pull cord',/recoil|pull\s*cord|starter\s*rope|rewind/i],['Chain',/\bchain\b/i],['Air filter',/air\s*filter/i],['Belt',/\bbelt\b/i],['Blade',/\bblade\b/i],['Battery',/\bbattery\b/i],['Primer bulb',/primer/i],['Ignition/Coil',/ignition|\bcoil\b/i]];
+  var counts={};
+  prior.forEach(function(o){
+    var text=((o.parts||[]).map(function(p){return (p.desc||'')+' '+(p.note||'');}).join(' ')+' '+(o.complaint||'')+' '+(o.notes||'')).toLowerCase();
+    var seen={};
+    ITEMS.forEach(function(it){if(it[1].test(text)&&!seen[it[0]]){seen[it[0]]=true;counts[it[0]]=(counts[it[0]]||0)+1;}});
+  });
+  var repeats=Object.keys(counts).filter(function(n){return counts[n]>=2;}).map(function(n){return {name:n,count:counts[n]};}).sort(function(a,b){return b.count-a.count;});
+  return {total:prior.length,last12:last12,repeats:repeats,last:prior[0]||null};
+}
+function renderRepeatIntel(custId){
+  var el=document.getElementById('repeat-intel');if(!el)return;
+  if(!custId){el.style.display='none';el.innerHTML='';return;}
+  var d=computeRepeatIntel(custId);
+  el.style.display='block';
+  if(d.total===0){el.innerHTML='<div style="font-size:12px;color:var(--muted);background:var(--off);border-radius:4px;padding:7px 10px">First-time customer &mdash; no prior work orders on file.</div>';return;}
+  var repeatHtml=d.repeats.length?('<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px">'+d.repeats.map(function(r){return '<span style="background:#FAEEDA;border:1px solid #EF9F27;color:#8a5a00;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">&#128260; '+r.name+' &times;'+r.count+'</span>';}).join('')+'</div>'):'';
+  var lastLine='';
+  if(d.last){var le=[d.last.brand,d.last.equipType].filter(Boolean).join(' ');lastLine='<div style="font-size:11px;color:var(--muted);margin-top:4px">Last visit: '+(d.last.dateIn||'&mdash;')+(le?' &middot; '+le:'')+(d.last.complaint?' &middot; &ldquo;'+d.last.complaint.slice(0,40)+'&rdquo;':'')+'</div>';}
+  var headColor=d.total>=3?'#8a5a00':'var(--gray2)';
+  el.innerHTML='<div style="background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:8px 10px">'
+    +'<div style="font-size:13px;font-weight:700;color:'+headColor+'">&#128260; '+d.total+' prior work order'+(d.total!==1?'s':'')+(d.last12?' &middot; '+d.last12+' in the last year':'')+'</div>'
+    +repeatHtml+lastLine+'</div>';
 }
 function setCustById(cid){
   if(!cid){custClear();return;}
@@ -2018,7 +2130,32 @@ function renderTracker(o,c){
 
 var _openWOonLoad=null;
 function tryOpenWO(){if(_openWOonLoad&&ORDERS[_openWOonLoad]&&Object.keys(CUSTS).length){var _w=_openWOonLoad;_openWOonLoad=null;openDet(_w);}}
-(function(){var q=new URLSearchParams(location.search);var t=q.get('track');if(t){initTracker(t);return;}_openWOonLoad=q.get('wo')||null;initFB();})();
+// ── PWA: generate the Miller Hardware app icon (red/black) in-page and inject manifest + apple-touch-icon ──
+function buildAppIcons(){
+  try{
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">'
+      +'<rect width="512" height="512" rx="100" fill="#ffffff"/>'
+      +'<rect x="18" y="18" width="476" height="476" rx="86" fill="none" stroke="#1a1a1a" stroke-width="10"/>'
+      +'<text x="256" y="252" text-anchor="middle" textLength="384" lengthAdjust="spacingAndGlyphs" font-family="Georgia,\'Times New Roman\',serif" font-weight="bold" font-size="152" fill="#CC0000">MILLER</text>'
+      +'<rect x="74" y="300" width="364" height="104" rx="52" fill="#1a1a1a"/>'
+      +'<text x="256" y="371" text-anchor="middle" textLength="228" lengthAdjust="spacingAndGlyphs" font-family="Georgia,\'Times New Roman\',serif" font-weight="bold" font-size="58" fill="#ffffff">SAW SHOP</text>'
+      +'<circle cx="106" cy="352" r="14" fill="#ffffff"/><circle cx="406" cy="352" r="14" fill="#ffffff"/>'
+      +'</svg>';
+    var img=new Image();
+    img.onload=function(){
+      try{
+        function png(size){var c=document.createElement('canvas');c.width=size;c.height=size;c.getContext('2d').drawImage(img,0,0,size,size);return c.toDataURL('image/png');}
+        var p512=png(512),p192=png(192),p180=png(180);
+        var at=document.createElement('link');at.rel='apple-touch-icon';at.href=p180;document.head.appendChild(at);
+        var m={name:'Miller Saw Shop',short_name:'Saw Shop',start_url:'.',scope:'.',display:'standalone',background_color:'#ffffff',theme_color:'#CC0000',icons:[{src:p192,sizes:'192x192',type:'image/png',purpose:'any'},{src:p512,sizes:'512x512',type:'image/png',purpose:'any'}]};
+        var b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
+        var ml=document.createElement('link');ml.rel='manifest';ml.href=URL.createObjectURL(b);document.head.appendChild(ml);
+      }catch(e){}
+    };
+    img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+  }catch(e){}
+}
+(function(){var q=new URLSearchParams(location.search);var t=q.get('track');if(t){initTracker(t);return;}_openWOonLoad=q.get('wo')||null;buildAppIcons();initFB();})();
 </script>
 </body>
 </html>
