@@ -65,7 +65,7 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 .wo-equip{font-size:19px;font-weight:600;color:var(--dark)}
 .wo-tech{font-size:12px;color:var(--muted);min-width:70px;text-align:right}
 .wo-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.badge{display:inline-block;padding:3px 9px;border-radius:2px;font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.badge{display:inline-block;padding:3px 9px;border-radius:2px;font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
 .b-intake{background:#e6f1fb;color:#0c447c}
 .b-diag{background:#faeeda;color:#633806}
 .b-repair{background:#eeedfe;color:#3c3489}
@@ -189,6 +189,9 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   .stat .lbl{font-size:10px}
   /* Parts-to-order grid goes single column */
   .po-grid{grid-template-columns:1fr !important}
+  /* Part rows: buttons drop below the part info instead of squeezing it */
+  .po-row{flex-wrap:wrap}
+  .po-row .po-btns{flex-basis:100%;justify-content:flex-start}
   .g2,.g3,.g4{grid-template-columns:1fr}
   .modal{padding:14px;border-radius:0;width:100vw;max-width:100vw;margin:0}
   .modal-bg{padding:0;align-items:flex-start}
@@ -198,7 +201,11 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   .board-col{width:180px}
   .srow{gap:5px}
   .srow input,.srow select{font-size:14px;padding:6px 8px}
-  .wo-cust{font-size:20px}
+  /* WO rows: badges drop to their own full-width row so the text keeps the whole line */
+  .wo-row{flex-wrap:wrap;padding:12px 12px;gap:4px 10px}
+  .wo-main{flex:1 1 0;min-width:200px}
+  .wo-meta{flex-basis:100%;justify-content:flex-start}
+  .wo-cust{font-size:20px;white-space:normal;overflow:visible;text-overflow:clip}
   .wo-equip{font-size:18px}
   .sect-lbl{font-size:14px}
   .status-btns{gap:4px}
@@ -1099,7 +1106,7 @@ function openDet(id){
   document.getElementById('det-body').innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
     +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
-    +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
+    +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
     +'<div class="sect-lbl">Notes</div>'
     +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
@@ -1644,6 +1651,7 @@ function renderPartOrders(){
 }
 function buildPORow(cat,i,p){
       var row=document.createElement('div');
+      row.className='po-row';
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       if(p.received)row.style.opacity='0.65';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
@@ -1660,7 +1668,7 @@ function buildPORow(cat,i,p){
         if(wo){woDiv.onclick=(function(woid){return function(){openDet(woid);};})(p.woId);}
         info.insertBefore(woDiv,info.children[1]||null);
       }
-      var btns=document.createElement('div');btns.style.cssText='display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;align-items:center';
+      var btns=document.createElement('div');btns.className='po-btns';btns.style.cssText='display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;align-items:center';
       if(cat!=='stihl'){
         // Only "Other" parts pick a vendor — Stihl parts have exactly one source
         var vSel=document.createElement('select');
