@@ -4,6 +4,7 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-storage-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -66,6 +67,8 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 .wo-tech{font-size:12px;color:var(--muted);min-width:70px;text-align:right}
 .wo-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .badge{display:inline-block;padding:3px 9px;border-radius:2px;font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.mic-live{background:var(--red)!important;color:#fff!important;border-color:var(--red)!important;animation:micpulse 1.1s infinite}
+@keyframes micpulse{0%,100%{opacity:1}50%{opacity:.55}}
 .b-intake{background:#e6f1fb;color:#0c447c}
 .b-diag{background:#faeeda;color:#633806}
 .b-repair{background:#eeedfe;color:#3c3489}
@@ -378,6 +381,14 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
     <div class="card">
+      <div class="card-hdr">Customer &ldquo;Track My Repair&rdquo; Link</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:10px">When ON, text messages to customers include a private link to a live status page for their repair (first name, equipment, and status only &mdash; no phone or address). Turn OFF to stop sharing status links.</div>
+      <label style="display:flex;align-items:center;gap:9px;font-size:15px;font-weight:600;cursor:pointer">
+        <input type="checkbox" id="tracker-on" onchange="saveTrackerSetting()" style="width:18px;height:18px;accent-color:var(--red)">
+        <span id="tracker-on-lbl">Enable Track My Repair links</span>
+      </label>
+    </div>
+    <div class="card">
       <div class="card-hdr">Export &amp; Backup</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="exportCSV('orders')">Work Orders CSV</button>
@@ -663,6 +674,21 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 </div>
 
 
+<!-- SIGNATURE MODAL -->
+<div class="modal-bg" id="sig-modal" style="z-index:250">
+<div class="modal">
+  <div class="modal-title" id="sig-title">Signature</div>
+  <div id="sig-statement" style="font-size:13px;color:var(--gray2);margin-bottom:10px;line-height:1.4"></div>
+  <canvas id="sig-canvas" width="600" height="200" style="width:100%;height:auto;touch-action:none;border:1.5px dashed var(--silver);border-radius:4px;background:#fff;display:block;cursor:crosshair"></canvas>
+  <div style="font-size:11px;color:var(--muted);margin-top:5px">Sign with your finger or mouse in the box above.</div>
+  <div class="mfoot">
+    <button class="btn" onclick="closeM('sig-modal')">Cancel</button>
+    <button class="btn" onclick="clearSig()">Clear</button>
+    <button class="btn primary" onclick="saveSig()">Save Signature</button>
+  </div>
+</div>
+</div>
+
 <!-- PART ORDER MODAL -->
 <div class="modal-bg" id="part-order-modal" style="z-index:230">
 <div class="modal">
@@ -877,8 +903,8 @@ function initFB(){
     DB.ref('.info/connected').on('value',function(snap){
       setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
     });
-    DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();});
-    DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();});
+    DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
+    DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();tryOpenWO();});
     DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
     DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
     DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
@@ -1104,7 +1130,7 @@ function openDet(id){
   var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+o.partsWaiting+'</div>':'';
   var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
   document.getElementById('det-body').innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
     +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
@@ -1112,6 +1138,7 @@ function openDet(id){
     +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-bottom:8px">'
     +'<div style="flex:1;min-width:160px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Add a Note</div><input type="text" id="ql-gen-note-'+id+'" placeholder="Type a note, then tap Add Note" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
+    +'<button class="btn sm" id="mic-'+id+'" onclick="startDictation(\''+id+'\')" title="Dictate a note" style="align-self:flex-end;min-width:44px;font-size:15px">&#127908;</button>'
     +'<button class="btn sm primary" onclick="quickAddNote(\''+id+'\')" style="align-self:flex-end">+ Add Note</button>'
     +'</div>'
     +'<hr>'
@@ -1126,11 +1153,13 @@ function openDet(id){
     +'</div>'
     +'<div class="sect-lbl">Customer Contact Log</div>'+logHtml
     +'<button class="btn sm outline" onclick="openContactLog(\''+id+'\')" style="margin-top:8px">+ Log Contact</button>'
+    +'<div id="sig-section-'+id+'">'+sigSectionHtml(id)+'</div>'
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
     +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
     +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
     +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button><button class="btn" onclick="downloadInvoice(\''+id+'\')">&#x2B07; Download Invoice</button></div>';
   document.getElementById('det-modal').classList.add('open');
+  loadSignatures(id,function(){var el=document.getElementById('sig-section-'+id);if(el)el.innerHTML=sigSectionHtml(id);});
 }
 
 function handleAttach(woid,inp){
@@ -1205,9 +1234,19 @@ function editCust(id){var c=CUSTS[id];if(!c)return;editCid=id;document.getElemen
 
 function printWO(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
-  var locAddr=(o.location==='Harrison')?'#2 Necessity Ave &middot; Harrison, AR 72601 &middot; (870) 741-3493':'1609 Hwy 62 West &middot; Yellville, AR 72687 &middot; (870) 449-4255';
+  if(!SIGNATURES[id]){loadSignatures(id,function(){printWO(id);});return;}
+  var locAddr=(o.location==='Harrison')?'#2 Necessity Ave &middot; Harrison, AR 72601 &middot; (870) 741-3493':'1609 Hwy 62 West &middot; Yellville, AR 72687 &middot; (870) 449-5234';
   var custName=((c.first||'')+' '+(c.last||'')).trim();
   var equipLine=[o.brand,o.equipType].filter(Boolean).join(' ');
+  var qrImg='';
+  if(SETTINGS.trackerOn!==false&&typeof qrcode==='function'){try{var _qr=qrcode(0,'M');_qr.addData(trackerLink(o.id));_qr.make();qrImg=_qr.createDataURL(5,8);}catch(e){qrImg='';}}
+  var qrBlock=qrImg?('<div style="display:flex;align-items:center;gap:14px;border:1.5px solid #1a1a1a;border-radius:3px;padding:10px 14px;margin-bottom:14px"><img src="'+qrImg+'" style="width:92px;height:92px;flex-shrink:0" alt="Track your repair"><div><div style="font-size:14px;font-weight:800;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Track Your Repair</div><div style="font-size:12px;color:#444;line-height:1.45">Scan this code with your phone camera to check your repair status any time &mdash; no app needed.</div></div></div>'):'';
+  var techQrImg='';
+  if(typeof qrcode==='function'){try{var _tq=qrcode(0,'M');_tq.addData(location.origin+location.pathname+'?wo='+o.id);_tq.make();techQrImg=_tq.createDataURL(4,4);}catch(e){techQrImg='';}}
+  var techQrBlock=techQrImg?('<div style="text-align:center;flex-shrink:0"><img src="'+techQrImg+'" style="width:78px;height:78px" alt="Open work order"><div style="font-size:8px;color:#888;text-transform:uppercase;letter-spacing:.03em;margin-top:1px">Scan: open in app</div></div>'):'';
+  var _sig=SIGNATURES[o.id]||{};
+  function _sigCell(s,label){var body=s?('<img src="'+s.data+'" style="height:38px;max-width:100%;display:block"><div style="border-top:1px solid #1a1a1a;font-size:9px;color:#555;padding-top:2px">Signed '+s.ts+'</div>'):('<div style="border-bottom:1px solid #1a1a1a;height:34px"></div><div style="font-size:9px;color:#888;padding-top:2px">Signature &amp; Date</div>');return '<div style="flex:1"><div style="font-size:8px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">'+label+'</div>'+body+'</div>';}
+  var sigBlock='<div style="display:flex;gap:24px;margin:8px 0 12px">'+_sigCell(_sig.intake,'Drop-off &mdash; Authorizes Diagnosis')+_sigCell(_sig.pickup,'Pickup &mdash; Received Equipment')+'</div>';
   var lines=function(n){var s='';for(var i=0;i<n;i++){s+='<div style="border-bottom:1px solid #aaa;height:22px;margin-bottom:3px"></div>';}return s;};
   var existParts=(o.parts||[]).length;
   var prows=(o.parts||[]).map(function(p){
@@ -1263,6 +1302,8 @@ function printWO(id){
     +'</div>'
     +'</div>'
     +(o.complaint?'<div style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Customer Complaint</div><div style="font-size:13px;padding:10px 12px;background:#f6f4f1;border-left:3px solid #1a1a1a;line-height:1.5">'+o.complaint+'</div></div>':'')
+    +qrBlock
+    +sigBlock
     +'<div style="border-top:1px solid #ccc;padding-top:10px;font-size:10px;color:#666;line-height:1.5">Not responsible for loss or damage to articles left in equipment. Work not claimed within 30 days subject to storage fees. Miller Hardware Company &mdash; Est. 1931.</div>'
     +'</div>'
     +'</div>';
@@ -1275,6 +1316,8 @@ function printWO(id){
     +'<div style="font-size:11px;color:#555;margin-top:1px">Saw Shop &mdash; True Value Dealer</div>'
     +'<div style="font-size:11px;color:#555;margin-top:1px">'+locAddr+'</div>'
     +'</div>'
+    +'<div style="display:flex;align-items:flex-start;gap:12px">'
+    +techQrBlock
     +'<div style="text-align:right">'
     +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555">Service Work Order</div>'
     +'<div style="font-size:28px;font-weight:800;line-height:1">#'+o.woNum+'</div>'
@@ -1282,6 +1325,7 @@ function printWO(id){
     +(o.ticket?'<div style="font-size:11px;color:#555">Open Ticket # '+o.ticket+'</div>':'')
     +(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')
     +(o.estDate?'<div style="font-size:11px;color:#555">Est. Done: '+o.estDate+'</div>':'')
+    +'</div>'
     +'</div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:5px">'
@@ -1338,7 +1382,7 @@ function printWO(id){
     +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:18px">Approved By</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:3px"></div><div style="font-size:9px;color:#888">Supervisor / Manager</div></div>'
     +'<div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:18px">Customer Pickup</div><div style="border-bottom:1.5px solid #1a1a1a;margin-bottom:3px"></div><div style="font-size:9px;color:#888">Signature &amp; Date</div></div>'
     +'</div>'
-    +'<div style="text-align:center;margin-top:7px;padding-top:6px;border-top:1px solid #ccc;font-size:10px;color:#888">Miller Hardware Company &mdash; Serving Arkansas Since 1931 &bull; Harrison: (870) 741-3493 &bull; Yellville: (870) 449-4255</div>'
+    +'<div style="text-align:center;margin-top:7px;padding-top:6px;border-top:1px solid #ccc;font-size:10px;color:#888">Miller Hardware Company &mdash; Serving Arkansas Since 1931 &bull; Harrison: (870) 741-3493 &bull; Yellville: (870) 449-5234</div>'
     +'</div>';
   var html=page1+page2;
   var pa=document.getElementById('print-area');pa.innerHTML=html;pa.style.display='block';
@@ -1465,7 +1509,7 @@ function downloadInvoice(id){
   var c=CUSTS[o.custId]||{};
   var isHarrison=o.location==='Harrison';
   var shopAddr=isHarrison?'#2 Necessity Ave, Harrison, AR 72601':'1609 Hwy 62 West, Yellville, AR 72687';
-  var shopPhone=isHarrison?'(870) 741-3493':'(870) 449-4255';
+  var shopPhone=isHarrison?'(870) 741-3493':'(870) 449-5234';
   var custName=((c.first||'')+' '+(c.last||'')).trim();
   var equipLine=[o.brand,o.equipType,o.model?'Model '+o.model:'',o.serial?'SN '+o.serial:''].filter(Boolean).join('   ·   ');
   var jsPDF=window.jspdf.jsPDF;
@@ -1533,6 +1577,74 @@ function quickAddOrderPart(woid,cat){
   document.getElementById('ql-note-'+woid).value='';
   document.getElementById('ql-qty-'+woid).value='1';
   openDet(woid);
+}
+// ── Signatures (drop-off authorization + pickup receipt) ─────────────────
+var SIGNATURES={};
+var _sigCtx=null,_sigDrawing=false,_sigHasInk=false,_sigWoid=null,_sigType=null,_sigInited=false;
+var SIG_TITLES={intake:'Drop-off Authorization',pickup:'Pickup Receipt'};
+var SIG_STMTS={intake:'I authorize Miller Hardware to inspect, diagnose, and perform service on the equipment described in this work order.',pickup:'I have received my equipment from Miller Hardware in satisfactory condition.'};
+function loadSignatures(woid,cb){
+  if(SIGNATURES[woid]){if(cb)cb();return;}
+  if(!DB){SIGNATURES[woid]={};if(cb)cb();return;}
+  DB.ref('signatures/'+woid).once('value',function(s){SIGNATURES[woid]=s.val()||{};if(cb)cb();});
+}
+function sigSectionHtml(id){
+  var s=SIGNATURES[id]||{};
+  function row(type,label){
+    var sig=s[type];
+    var status=sig?('<img src="'+sig.data+'" style="height:40px;border:1px solid var(--silver);border-radius:3px;background:#fff;vertical-align:middle"> <span style="font-size:11px;color:var(--muted)">Signed '+(sig.ts||'')+'</span>'):'<span style="font-size:12px;color:var(--muted);font-style:italic">Not signed</span>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--off)"><div style="min-width:0"><div style="font-size:13px;font-weight:600">'+label+'</div><div style="margin-top:4px">'+status+'</div></div><button class="btn sm outline" style="flex-shrink:0" onclick="openSigPad(\''+id+'\',\''+type+'\')">'+(sig?'Re-sign':'Capture')+'</button></div>';
+  }
+  return '<div class="sect-lbl">Signatures</div>'+row('intake','Drop-off &mdash; Authorizes Diagnosis')+row('pickup','Pickup &mdash; Received Equipment');
+}
+function openSigPad(woid,type){
+  _sigWoid=woid;_sigType=type;_sigHasInk=false;
+  document.getElementById('sig-title').textContent=SIG_TITLES[type]||'Signature';
+  document.getElementById('sig-statement').textContent=SIG_STMTS[type]||'';
+  var canvas=document.getElementById('sig-canvas');
+  _sigCtx=canvas.getContext('2d');
+  _sigCtx.clearRect(0,0,canvas.width,canvas.height);
+  _sigCtx.lineWidth=2.5;_sigCtx.lineCap='round';_sigCtx.lineJoin='round';_sigCtx.strokeStyle='#1a1a1a';
+  if(!_sigInited){initSigPad();_sigInited=true;}
+  document.getElementById('sig-modal').classList.add('open');
+}
+function initSigPad(){
+  var canvas=document.getElementById('sig-canvas');
+  function xy(e){var r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*(canvas.width/r.width),y:(e.clientY-r.top)*(canvas.height/r.height)};}
+  canvas.addEventListener('pointerdown',function(e){_sigDrawing=true;_sigHasInk=true;var p=xy(e);_sigCtx.beginPath();_sigCtx.moveTo(p.x,p.y);try{canvas.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();});
+  canvas.addEventListener('pointermove',function(e){if(!_sigDrawing)return;var p=xy(e);_sigCtx.lineTo(p.x,p.y);_sigCtx.stroke();e.preventDefault();});
+  canvas.addEventListener('pointerup',function(){_sigDrawing=false;});
+  canvas.addEventListener('pointercancel',function(){_sigDrawing=false;});
+}
+function clearSig(){var canvas=document.getElementById('sig-canvas');if(_sigCtx)_sigCtx.clearRect(0,0,canvas.width,canvas.height);_sigHasInk=false;}
+function saveSig(){
+  if(!_sigHasInk){alert('Please sign in the box first.');return;}
+  var data=document.getElementById('sig-canvas').toDataURL('image/png');
+  var stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  var rec={data:data,ts:stamp};
+  if(!SIGNATURES[_sigWoid])SIGNATURES[_sigWoid]={};
+  SIGNATURES[_sigWoid][_sigType]=rec;
+  if(DB){DB.ref('signatures/'+_sigWoid+'/'+_sigType).set(rec);}
+  var el=document.getElementById('sig-section-'+_sigWoid);if(el)el.innerHTML=sigSectionHtml(_sigWoid);
+  closeM('sig-modal');
+}
+var _recog=null;
+function startDictation(id){
+  var input=document.getElementById('ql-gen-note-'+id);
+  var btn=document.getElementById('mic-'+id);
+  if(!input)return;
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){alert('Voice input isn\'t supported on this browser. Try Chrome on Android, or Safari on iPhone.');return;}
+  if(_recog){try{_recog.stop();}catch(e){}_recog=null;if(btn){btn.classList.remove('mic-live');btn.innerHTML='&#127908;';}return;}
+  var r=new SR();
+  r.lang='en-US';r.interimResults=true;r.continuous=false;
+  var base=input.value?input.value.replace(/\s*$/,'')+' ':'';
+  r.onstart=function(){if(btn){btn.classList.add('mic-live');btn.textContent='●';}};
+  r.onresult=function(e){var txt='';for(var i=0;i<e.results.length;i++){txt+=e.results[i][0].transcript;}input.value=base+txt;};
+  r.onerror=function(e){_recog=null;if(btn){btn.classList.remove('mic-live');btn.innerHTML='&#127908;';}if(e&&(e.error==='not-allowed'||e.error==='service-not-allowed')){alert('Microphone access is blocked. Allow the mic for this site in your browser settings, then try again.');}};
+  r.onend=function(){_recog=null;if(btn){btn.classList.remove('mic-live');btn.innerHTML='&#127908;';}input.focus();};
+  _recog=r;
+  try{r.start();}catch(e){_recog=null;if(btn){btn.classList.remove('mic-live');btn.innerHTML='&#127908;';}}
 }
 function quickAddNote(woid){
   var inp=document.getElementById('ql-gen-note-'+woid);
@@ -1700,7 +1812,7 @@ function buildPORow(cat,i,p){
       row.appendChild(info);row.appendChild(btns);
       return row;
 }
-var SETTINGS={ageWarnDays:7,ageOldDays:14};
+var SETTINGS={ageWarnDays:7,ageOldDays:14,trackerOn:true};
 
 function saveAgeSettings(){
   SETTINGS.ageWarnDays=parseInt(document.getElementById('age-warn-days').value)||7;
@@ -1712,6 +1824,7 @@ function loadAgeInputs(){
   var w=document.getElementById('age-warn-days'),o=document.getElementById('age-old-days');
   if(w)w.value=SETTINGS.ageWarnDays;
   if(o)o.value=SETTINGS.ageOldDays;
+  loadTrackerToggle();
 }
 
 function renderDaily(){
@@ -1830,15 +1943,82 @@ function textCustomer(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
   if(!c.phone){alert('No phone number on file for this customer.');return;}
   var phone=(c.phone||'').replace(/\D/g,'');
-  var shopPhone=o.location==='Harrison'?'(870) 741-3493':'(870) 449-4255';
+  var shopPhone=o.location==='Harrison'?'(870) 741-3493':'(870) 449-5234';
   var msg=o.status==='Ready'
     ?'Hi '+(c.first||'there')+', your '+(o.brand?o.brand+' ':'')+o.equipType+' is ready for pickup at Miller Hardware! Give us a call at '+shopPhone+' if you have any questions.'
     :'Hi '+(c.first||'there')+', this is Miller Hardware reaching out about your '+(o.brand?o.brand+' ':'')+o.equipType+'. Give us a call at '+shopPhone+'.';
+  if(SETTINGS.trackerOn!==false){msg+=' Track your repair here: '+trackerLink(id);}
   var a=document.createElement('a');
   a.href='sms:'+phone+'?body='+encodeURIComponent(msg);
   a.click();
 }
-initFB();
+
+// ── Track My Repair (customer-facing read-only status page) ──────────────
+function trackerLink(id){return location.origin+location.pathname+'?track='+id;}
+function saveTrackerSetting(){SETTINGS.trackerOn=document.getElementById('tracker-on').checked;if(DB){DB.ref('settings').set(SETTINGS);}else{saveLocal();}loadTrackerToggle();}
+function loadTrackerToggle(){var el=document.getElementById('tracker-on');if(!el)return;var on=SETTINGS.trackerOn!==false;el.checked=on;var lbl=document.getElementById('tracker-on-lbl');if(lbl)lbl.textContent=on?'Enabled — status links are shared in customer texts':'Disabled — no status links shared';}
+function trackerMsg(title,sub){return '<div style="max-width:460px;margin:40px auto;padding:28px 22px;font-family:Barlow,sans-serif;text-align:center;color:#1a1a1a"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:24px">MILLER HARDWARE</div><div style="font-size:12px;color:#888;letter-spacing:.09em;text-transform:uppercase;margin-bottom:22px">Saw Shop</div><div style="font-size:19px;font-weight:800;margin-bottom:8px">'+title+'</div><div style="font-size:15px;color:#555;line-height:1.4">'+sub+'</div></div>';}
+function initTracker(id){
+  var app=document.querySelector('.app');if(app)app.style.display='none';
+  var fab=document.querySelector('.fab');if(fab)fab.style.display='none';
+  var page=document.getElementById('tracker-page');
+  if(!page){page=document.createElement('div');page.id='tracker-page';document.body.appendChild(page);}
+  page.innerHTML='<div style="text-align:center;padding:70px 20px;color:#999;font-family:Barlow,sans-serif">Loading your repair status&hellip;</div>';
+  try{if(!firebase.apps.length)firebase.initializeApp(FB_BAKED);DB=firebase.database();}
+  catch(e){page.innerHTML=trackerMsg('Something went wrong','Please call the shop for an update on your repair.');return;}
+  DB.ref('settings').once('value',function(s){
+    var st=s.val()||{};
+    if(st.trackerOn===false){page.innerHTML=trackerMsg('Status tracking is turned off','Please call Miller Hardware and we\'ll gladly give you an update.');return;}
+    DB.ref('orders/'+id).once('value',function(os0){
+      var o0=os0.val();
+      if(!o0){page.innerHTML=trackerMsg('Repair not found','Please double-check your link, or call the shop for an update.');return;}
+      DB.ref('customers/'+o0.custId).once('value',function(cs){
+        var cust=cs.val()||{};
+        DB.ref('orders/'+id).on('value',function(os){var o=os.val();if(!o){page.innerHTML=trackerMsg('Repair not found','Please call the shop for an update.');return;}renderTracker(o,cust);});
+      });
+    });
+  });
+}
+function renderTracker(o,c){
+  var page=document.getElementById('tracker-page');if(!page)return;
+  var steps=['Intake','Diagnosing','In Repair','Waiting on Parts','Ready','Picked Up'];
+  var labels=['Received','Diagnosing','In Repair','Waiting on Parts','Ready for Pickup','Picked Up'];
+  var cur=steps.indexOf(o.status||'Intake');if(cur<0)cur=0;
+  var isHarrison=o.location==='Harrison';
+  var shopPhone=isHarrison?'(870) 741-3493':'(870) 449-5234';
+  var townLine=isHarrison?'Harrison':'Yellville';
+  var equip=[o.brand,o.equipType].filter(Boolean).join(' ')||'your equipment';
+  var first=c.first||'there';
+  var ready=o.status==='Ready';
+  var stepHtml=steps.map(function(s,i){
+    var done=i<cur,current=i===cur;
+    var bg=done?'#2d7d1e':(current?'#CC0000':'#e0e0e0');
+    var mark=done?'&#10003;':(current?'&#9679;':'');
+    var tcolor=(done||current)?'#1a1a1a':'#aaa';
+    var tweight=current?'800':(done?'600':'400');
+    var line=i<steps.length-1?'<div style="width:2px;height:14px;margin:2px 0 2px 12px;background:'+(done?'#2d7d1e':'#e0e0e0')+'"></div>':'';
+    return '<div style="display:flex;align-items:center;gap:13px"><div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;background:'+bg+'">'+mark+'</div><div style="font-size:16px;font-weight:'+tweight+';color:'+tcolor+'">'+labels[i]+'</div></div>'+line;
+  }).join('');
+  var midHtml=ready
+    ?'<div style="background:#eaf7e4;border:1.5px solid #2d7d1e;border-radius:8px;padding:15px 16px;margin-top:16px;text-align:center"><div style="font-size:18px;font-weight:800;color:#1a5c0a">&#9989; Ready for pickup!</div><div style="font-size:14px;color:#2d5c1a;margin-top:3px">Come by our '+townLine+' store when you get a chance.</div></div>'
+    :(o.estDate?'<div style="text-align:center;font-size:14px;color:#555;margin-top:16px">Estimated ready date: <strong>'+o.estDate+'</strong></div>':'');
+  page.innerHTML='<div style="max-width:470px;margin:0 auto;padding:26px 20px 50px;font-family:Barlow,sans-serif;color:#1a1a1a">'
+    +'<div style="text-align:center"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:27px;letter-spacing:.02em">MILLER HARDWARE</div><div style="font-size:12px;color:#888;letter-spacing:.1em;text-transform:uppercase">Saw Shop &middot; Repair Status</div></div>'
+    +'<div style="background:#fff;border:1.5px solid #e0e0e0;border-radius:10px;padding:22px 20px;margin-top:18px;box-shadow:0 2px 10px rgba(0,0,0,.04)">'
+    +'<div style="font-size:21px;font-weight:800">Hi '+first+'!</div>'
+    +'<div style="font-size:15px;color:#555;margin-top:2px">Here\'s the latest on your <strong>'+equip+'</strong>.</div>'
+    +'<div style="margin-top:20px">'+stepHtml+'</div>'
+    +'</div>'
+    +midHtml
+    +'<div style="text-align:center;margin-top:24px;font-size:14px;color:#555">Questions? Call our '+townLine+' store<br><a href="tel:'+shopPhone.replace(/\D/g,'')+'" style="font-size:22px;font-weight:800;color:#CC0000;text-decoration:none">'+shopPhone+'</a></div>'
+    +'<div style="text-align:center;margin-top:20px;font-size:11px;color:#bbb">Work Order #'+(o.woNum||'')+'</div>'
+    +'</div>';
+  document.title='Repair Status · Miller Hardware';
+}
+
+var _openWOonLoad=null;
+function tryOpenWO(){if(_openWOonLoad&&ORDERS[_openWOonLoad]&&Object.keys(CUSTS).length){var _w=_openWOonLoad;_openWOonLoad=null;openDet(_w);}}
+(function(){var q=new URLSearchParams(location.search);var t=q.get('track');if(t){initTracker(t);return;}_openWOonLoad=q.get('wo')||null;initFB();})();
 </script>
 </body>
 </html>
