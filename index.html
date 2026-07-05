@@ -393,12 +393,12 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="card" id="account-card">
       <div class="card-hdr">Account</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div style="font-size:13px;color:var(--gray2)">Signed in as <strong id="account-email">—</strong></div>
+        <div style="font-size:13px;color:var(--gray2)">Signed in as <strong id="account-email">—</strong> <span id="account-role" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--off);border:1px solid var(--silver);margin-left:4px"></span></div>
         <button class="btn sm" onclick="doLogout()">Sign Out</button>
       </div>
     </div>
     <!-- EXPORT — visible to everyone -->
-    <div class="card">
+    <div class="card admin-only">
       <div class="card-hdr">Work Order Age Warnings</div>
       <div style="font-size:13px;color:var(--gray2);margin-bottom:10px">Orders sitting longer than these thresholds are highlighted in the work order list — amber for warning, red for overdue.</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
@@ -407,7 +407,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <button class="btn sm primary" onclick="saveAgeSettings()">Save</button>
       </div>
     </div>
-    <div class="card">
+    <div class="card admin-only">
       <div class="card-hdr">Customer &ldquo;Track My Repair&rdquo; Link</div>
       <div style="font-size:13px;color:var(--gray2);margin-bottom:10px">When ON, text messages to customers include a private link to a live status page for their repair (first name, equipment, and status only &mdash; no phone or address). Turn OFF to stop sharing status links.</div>
       <label style="display:flex;align-items:center;gap:9px;font-size:15px;font-weight:600;cursor:pointer">
@@ -415,7 +415,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <span id="tracker-on-lbl">Enable Track My Repair links</span>
       </label>
     </div>
-    <div class="card">
+    <div class="card admin-only">
       <div class="card-hdr">Export &amp; Backup</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="exportCSV('orders')">Work Orders CSV</button>
@@ -437,9 +437,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     </div>
 
     <div id="admin-unlocked" style="display:none">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
-        <button class="btn sm del" onclick="lockAdmin()">Lock Admin</button>
-      </div>
       <div class="card">
         <div class="card-hdr">Technician Management</div>
         <div id="tech-chips" style="margin-bottom:10px"></div>
@@ -966,6 +963,7 @@ function startDataSync(){
   if(_synced)return;_synced=true;
   var ae=document.getElementById('account-email');
   if(ae&&CURRENT_USER){var d=CURRENT_USER.email||'';if(d.indexOf('@millersawshop.local')>0)d=d.split('@')[0];ae.textContent=d;}
+  applyRole();
   boot();
   DB.ref('.info/connected').on('value',function(snap){
     setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
@@ -977,7 +975,7 @@ function startDataSync(){
   DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
   DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
   DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
-  DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
+  DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();if(isAdmin())DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
   DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderDash();});
 }
 var AUTH=null,CURRENT_USER=null;
@@ -999,6 +997,19 @@ function doLogin(){
   }).then(function(){if(btn){btn.disabled=false;btn.textContent='Sign In';}});
 }
 function doLogout(){if(AUTH){AUTH.signOut();location.reload();}}
+// ── Roles: master (admin) vs shop staff. Admin = one of these emails; everyone else who signs in = staff. ──
+var ADMIN_EMAILS=['mike_millerhardware@outlook.com'];
+function isAdmin(){return !!(CURRENT_USER&&CURRENT_USER.email&&ADMIN_EMAILS.indexOf(CURRENT_USER.email.toLowerCase())>=0);}
+function applyRole(){
+  var admin=isAdmin();
+  document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
+  var al=document.getElementById('admin-locked'),au=document.getElementById('admin-unlocked');
+  if(al)al.style.display='none';                       // access-code box retired — never shown
+  if(au)au.style.display=admin?'block':'none';
+  if(admin){_adminUnlocked=true;renderTechs();renderVendors();}
+  var rl=document.getElementById('account-role');
+  if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
+}
 function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();}
 
 function loadIntervalInputs(){
@@ -1627,12 +1638,8 @@ var ADMIN_CODE = '8704495234';
 var _pendingDelete = null;
 
 function requireAdminDelete(msg, fn){
-  _pendingDelete = fn;
-  document.getElementById('del-modal-msg').textContent = msg;
-  document.getElementById('del-code-input').value = '';
-  document.getElementById('del-code-msg').style.display = 'none';
-  document.getElementById('del-modal').classList.add('open');
-  setTimeout(function(){var el=document.getElementById('del-code-input');if(el)el.focus();},150);
+  if(!isAdmin()){alert('Only the shop owner can delete or change this.\n\nAsk Mike to sign in on his account to do it.');return;}
+  if(confirm(msg)){fn();}
 }
 function confirmDelete(){
   var val = document.getElementById('del-code-input').value;
