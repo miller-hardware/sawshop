@@ -406,6 +406,14 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <button class="btn primary" onclick="addVendor()">Add Vendor</button>
       </div>
     </div>
+    <div class="card">
+      <div class="card-hdr">Technician Management</div>
+      <div id="tech-chips" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <input type="text" id="new-tech" placeholder="Tech name..." style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:'Barlow',sans-serif;min-width:180px">
+        <button class="btn primary" onclick="addTech()">Add Tech</button>
+      </div>
+    </div>
     <!-- EXPORT — visible to everyone -->
     <div class="card admin-only">
       <div class="card-hdr">Work Order Age Warnings</div>
@@ -446,14 +454,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     </div>
 
     <div id="admin-unlocked" style="display:none">
-      <div class="card">
-        <div class="card-hdr">Technician Management</div>
-        <div id="tech-chips" style="margin-bottom:10px"></div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap">
-          <input type="text" id="new-tech" placeholder="Tech name..." style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:'Barlow',sans-serif;min-width:180px">
-          <button class="btn primary" onclick="addTech()">Add Tech</button>
-        </div>
-      </div>
       <div class="card">
         <div class="card-hdr">Firebase Cloud Sync</div>
         <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Firebase config is baked in — connects automatically. Use the button below if you're having connection trouble.</div>
@@ -928,6 +928,7 @@ function saveIntervals(){
     other:parseInt(document.getElementById('si-other').value)||18
   };
   saveLocal();
+  if(DB)DB.ref('svcIntervals').set(SVC_INTERVALS);
 }
 
 
@@ -976,6 +977,7 @@ function startDataSync(){
   DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
   DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
   DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();if(isAdmin())DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
+  DB.ref('svcIntervals').on('value',function(s){var v=s.val();if(v){SVC_INTERVALS=Object.assign(SVC_INTERVALS,v);loadIntervalInputs();renderReminders();}});
   DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderDash();});
 }
 var AUTH=null,CURRENT_USER=null;
@@ -1034,7 +1036,7 @@ function writeContactLogs(woid,logs){if(DB){DB.ref('contactlogs/'+woid).set(logs
 function writePartOrders(){if(DB){DB.ref('partorders').set(PARTORDERS);}else{saveLocal();}}
 
 function addTech(){var n=document.getElementById('new-tech').value.trim();if(!n||TECHS.indexOf(n)>=0)return;TECHS.push(n);writeTechs();renderTechs();populateTechSels();document.getElementById('new-tech').value='';}
-function removeTech(n){requireAdminDelete('Remove tech '+n+'?',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();});}
+function removeTech(n){if(!confirm('Remove tech '+n+'?'))return;TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();}
 function renderTechs(){var el=document.getElementById('tech-chips');if(!el)return;el.innerHTML=TECHS.map(function(t){return '<span class="tech-chip">'+t+'<button onclick="removeTech(\''+t+'\')">&#x2715;</button></span>';}).join('');}
 
 function writeVendors(){if(DB){DB.ref('vendors').set(VENDORS);}else{saveLocal();}}
