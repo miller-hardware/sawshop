@@ -397,6 +397,15 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <button class="btn sm" onclick="doLogout()">Sign Out</button>
       </div>
     </div>
+    <div class="card">
+      <div class="card-hdr">Parts Vendor Management</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Vendors show as a dropdown on each part in the Parts to Order lists, so the orderer can pick who to order from.</div>
+      <div id="vendor-chips" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <input type="text" id="new-vendor" placeholder="Vendor name..." style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:'Barlow',sans-serif;min-width:180px" onkeydown="if(event.key==='Enter')addVendor()">
+        <button class="btn primary" onclick="addVendor()">Add Vendor</button>
+      </div>
+    </div>
     <!-- EXPORT — visible to everyone -->
     <div class="card admin-only">
       <div class="card-hdr">Work Order Age Warnings</div>
@@ -443,15 +452,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           <input type="text" id="new-tech" placeholder="Tech name..." style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:'Barlow',sans-serif;min-width:180px">
           <button class="btn primary" onclick="addTech()">Add Tech</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-hdr">Parts Vendor Management</div>
-        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Vendors show as a dropdown on each part in the Parts to Order lists, so the orderer can pick who to order from.</div>
-        <div id="vendor-chips" style="margin-bottom:10px"></div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap">
-          <input type="text" id="new-vendor" placeholder="Vendor name..." style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:'Barlow',sans-serif;min-width:180px" onkeydown="if(event.key==='Enter')addVendor()">
-          <button class="btn primary" onclick="addVendor()">Add Vendor</button>
         </div>
       </div>
       <div class="card">
@@ -1039,7 +1039,7 @@ function renderTechs(){var el=document.getElementById('tech-chips');if(!el)retur
 
 function writeVendors(){if(DB){DB.ref('vendors').set(VENDORS);}else{saveLocal();}}
 function addVendor(){var n=document.getElementById('new-vendor').value.trim();if(!n||VENDORS.indexOf(n)>=0)return;VENDORS.push(n);writeVendors();renderVendors();renderPartOrders();document.getElementById('new-vendor').value='';}
-function removeVendor(n){requireAdminDelete('Remove vendor '+n+'?',function(){VENDORS=VENDORS.filter(function(v){return v!==n;});writeVendors();renderVendors();renderPartOrders();});}
+function removeVendor(n){if(!confirm('Remove vendor '+n+'?'))return;VENDORS=VENDORS.filter(function(v){return v!==n;});writeVendors();renderVendors();renderPartOrders();}
 function renderVendors(){var el=document.getElementById('vendor-chips');if(!el)return;if(!VENDORS.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">No vendors yet — add your suppliers below.</div>';return;}el.innerHTML='';VENDORS.forEach(function(v){var chip=document.createElement('span');chip.className='tech-chip';chip.appendChild(document.createTextNode(v));var btn=document.createElement('button');btn.innerHTML='&#x2715;';btn.onclick=function(){removeVendor(v);};chip.appendChild(btn);el.appendChild(chip);});}
 function populateTechSels(){['m-tech','wo-tf'].forEach(function(id){var sel=document.getElementById(id);if(!sel)return;var cur=sel.value;sel.innerHTML=id==='m-tech'?'<option>Unassigned</option>':'<option value="">All Techs</option>';TECHS.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);});if(cur)sel.value=cur;});}
 function populateCustSel(){/* replaced by custSearch */}
