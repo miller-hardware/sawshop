@@ -977,7 +977,7 @@ function startDataSync(){
   DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
   DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
   DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
-  DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();});
+  DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
   DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderDash();});
 }
 var AUTH=null,CURRENT_USER=null;
@@ -1009,8 +1009,12 @@ function loadIntervalInputs(){
   document.getElementById('si-other').value=SVC_INTERVALS.other;
 }
 
-function writeOrder(o){if(DB){DB.ref('orders/'+o.id).set(o);}else{ORDERS[o.id]=o;saveLocal();refreshAll();}}
-function deleteOrder(id){if(DB){DB.ref('orders/'+id).remove();}else{delete ORDERS[id];saveLocal();refreshAll();}}
+function writeOrder(o){if(DB){DB.ref('orders/'+o.id).set(o);writePublicStatus(o);}else{ORDERS[o.id]=o;saveLocal();refreshAll();}}
+function deleteOrder(id){if(DB){DB.ref('orders/'+id).remove();DB.ref('public_status/'+id).remove();}else{delete ORDERS[id];saveLocal();refreshAll();}}
+// Public status mirror — only non-sensitive fields (first name, equipment, status); feeds the customer tracker so real customer data can stay locked.
+function publicStatusFor(o){var c=CUSTS[o.custId]||{};return {woNum:o.woNum||null,first:(c.first||'').trim().split(/\s+/)[0]||'',equip:[o.brand,o.equipType].filter(Boolean).join(' '),status:o.status||'Intake',estDate:o.estDate||'',location:o.location||'Yellville',updated:Date.now()};}
+function writePublicStatus(o){if(DB&&o&&o.id){DB.ref('public_status/'+o.id).set(publicStatusFor(o));}}
+function backfillPublicStatus(){if(!DB)return 0;var n=0;Object.keys(ORDERS).forEach(function(k){var o=ORDERS[k];if(!o.id)o.id=k;writePublicStatus(o);n++;});DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);return n;}
 function writeCust(c){if(DB){DB.ref('customers/'+c.id).set(c);}else{CUSTS[c.id]=c;saveLocal();renderCustomers();populateCustSel();}}
 function writeTechs(){if(DB){DB.ref('techs').set(TECHS);}else{saveLocal();}}
 function writeEquipment(cid,eq){if(DB){DB.ref('equipment/'+cid).set(eq);}else{EQUIPMENT[cid]=eq;saveLocal();renderReminders();}}
@@ -2122,7 +2126,7 @@ function textCustomer(id){
 
 // ── Track My Repair (customer-facing read-only status page) ──────────────
 function trackerLink(id){return location.origin+location.pathname+'?track='+id;}
-function saveTrackerSetting(){SETTINGS.trackerOn=document.getElementById('tracker-on').checked;if(DB){DB.ref('settings').set(SETTINGS);}else{saveLocal();}loadTrackerToggle();}
+function saveTrackerSetting(){SETTINGS.trackerOn=document.getElementById('tracker-on').checked;if(DB){DB.ref('settings').set(SETTINGS);DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn);}else{saveLocal();}loadTrackerToggle();}
 function loadTrackerToggle(){var el=document.getElementById('tracker-on');if(!el)return;var on=SETTINGS.trackerOn!==false;el.checked=on;var lbl=document.getElementById('tracker-on-lbl');if(lbl)lbl.textContent=on?'Enabled — status links are shared in customer texts':'Disabled — no status links shared';}
 function trackerMsg(title,sub){return '<div style="max-width:460px;margin:40px auto;padding:28px 22px;font-family:Barlow,sans-serif;text-align:center;color:#1a1a1a"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:24px">MILLER HARDWARE</div><div style="font-size:12px;color:#888;letter-spacing:.09em;text-transform:uppercase;margin-bottom:22px">Saw Shop</div><div style="font-size:19px;font-weight:800;margin-bottom:8px">'+title+'</div><div style="font-size:15px;color:#555;line-height:1.4">'+sub+'</div></div>';}
 function initTracker(id){
@@ -2133,15 +2137,13 @@ function initTracker(id){
   page.innerHTML='<div style="text-align:center;padding:70px 20px;color:#999;font-family:Barlow,sans-serif">Loading your repair status&hellip;</div>';
   try{if(!firebase.apps.length)firebase.initializeApp(FB_BAKED);DB=firebase.database();}
   catch(e){page.innerHTML=trackerMsg('Something went wrong','Please call the shop for an update on your repair.');return;}
-  DB.ref('settings').once('value',function(s){
-    var st=s.val()||{};
-    if(st.trackerOn===false){page.innerHTML=trackerMsg('Status tracking is turned off','Please call Miller Hardware and we\'ll gladly give you an update.');return;}
-    DB.ref('orders/'+id).once('value',function(os0){
-      var o0=os0.val();
-      if(!o0){page.innerHTML=trackerMsg('Repair not found','Please double-check your link, or call the shop for an update.');return;}
-      DB.ref('customers/'+o0.custId).once('value',function(cs){
-        var cust=cs.val()||{};
-        DB.ref('orders/'+id).on('value',function(os){var o=os.val();if(!o){page.innerHTML=trackerMsg('Repair not found','Please call the shop for an update.');return;}renderTracker(o,cust);});
+  DB.ref('public_config/trackerOn').once('value',function(cs){
+    if(cs.val()===false){page.innerHTML=trackerMsg('Status tracking is turned off','Please call Miller Hardware and we\'ll gladly give you an update.');return;}
+    DB.ref('public_status/'+id).once('value',function(ps0){
+      if(!ps0.val()){page.innerHTML=trackerMsg('Repair not found','Please double-check your link, or call the shop for an update.');return;}
+      DB.ref('public_status/'+id).on('value',function(ps){
+        var p=ps.val();if(!p){page.innerHTML=trackerMsg('Repair not found','Please call the shop for an update.');return;}
+        renderTracker({status:p.status,location:p.location,estDate:p.estDate,woNum:p.woNum,equipType:p.equip},{first:p.first});
       });
     });
   });
