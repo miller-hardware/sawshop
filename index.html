@@ -2,6 +2,7 @@
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-storage-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-auth-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
@@ -264,6 +265,20 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 </style>
 
 <h2 class="sr-only">Miller Hardware Saw Shop — work order system v8</h2>
+<div id="login-screen" style="display:none;position:fixed;inset:0;z-index:5000;background:var(--off);align-items:center;justify-content:center;padding:20px;font-family:'Barlow',sans-serif">
+  <div style="width:100%;max-width:360px;background:#fff;border:1.5px solid var(--silver);border-radius:10px;padding:28px 24px;box-shadow:0 8px 30px rgba(0,0,0,.08)">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:32px;letter-spacing:.01em;color:var(--red);line-height:1">MILLER</div>
+      <div style="display:inline-block;background:var(--dark);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;padding:3px 14px;border-radius:14px;margin-top:4px">SAW SHOP</div>
+    </div>
+    <div style="font-size:13px;color:var(--gray2);text-align:center;margin-bottom:16px">Sign in to continue</div>
+    <input type="text" id="login-user" placeholder="Name or email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:11px 12px;border:1.5px solid var(--silver);border-radius:5px;font-size:16px;font-family:Barlow,sans-serif;margin-bottom:10px;background:#fff;color:var(--dark)">
+    <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:11px 12px;border:1.5px solid var(--silver);border-radius:5px;font-size:16px;font-family:Barlow,sans-serif;margin-bottom:6px;background:#fff;color:var(--dark)">
+    <div id="login-err" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:10px"></div>
+    <button id="login-btn" class="btn primary" onclick="doLogin()" style="width:100%;padding:12px;font-size:15px;justify-content:center">Sign In</button>
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:14px">Miller Hardware Saw Shop &middot; authorized staff only</div>
+  </div>
+</div>
 <div class="app">
   <div class="topbar">
     <div class="topbar-brand">MILLER <span>HARDWARE</span> <span style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:.06em">SAW SHOP</span></div>
@@ -375,6 +390,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
 
   <div class="view" id="tab-settings">
+    <div class="card" id="account-card">
+      <div class="card-hdr">Account</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="font-size:13px;color:var(--gray2)">Signed in as <strong id="account-email">—</strong></div>
+        <button class="btn sm" onclick="doLogout()">Sign Out</button>
+      </div>
+    </div>
     <!-- EXPORT — visible to everyone -->
     <div class="card">
       <div class="card-hdr">Work Order Age Warnings</div>
@@ -925,25 +947,58 @@ function initFB(){
     if(!firebase.apps.length)firebase.initializeApp(c);
     DB=firebase.database();
     if(c.storageBucket)STORAGE=firebase.storage();
-    loadLocal();boot();
-    DB.ref('.info/connected').on('value',function(snap){
-      setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
+    AUTH=firebase.auth();
+    loadLocal();
+    showLogin();
+    AUTH.onAuthStateChanged(function(user){
+      CURRENT_USER=user||null;
+      if(user){hideLogin();startDataSync();}else{showLogin();}
     });
-    DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
-    DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();tryOpenWO();});
-    DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
-    DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
-    DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
-    DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
-    DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
-    DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();});
-    DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderDash();});
   }catch(e){
     console.error('Firebase init error:',e);
     setSP('err','Error: '+e.message);
-    loadLocal();boot();
+    var le=document.getElementById('login-err');if(le)le.textContent='Connection error: '+e.message;
+    showLogin();
   }
 }
+var _synced=false;
+function startDataSync(){
+  if(_synced)return;_synced=true;
+  var ae=document.getElementById('account-email');
+  if(ae&&CURRENT_USER){var d=CURRENT_USER.email||'';if(d.indexOf('@millersawshop.local')>0)d=d.split('@')[0];ae.textContent=d;}
+  boot();
+  DB.ref('.info/connected').on('value',function(snap){
+    setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
+  });
+  DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
+  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();tryOpenWO();});
+  DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
+  DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
+  DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
+  DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
+  DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
+  DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();});
+  DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderDash();});
+}
+var AUTH=null,CURRENT_USER=null;
+function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
+function hideLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='none';var a=document.querySelector('.app');if(a)a.style.visibility='';}
+function doLogin(){
+  var v=(document.getElementById('login-user').value||'').trim();
+  var pw=document.getElementById('login-pass').value||'';
+  var le=document.getElementById('login-err');le.textContent='';
+  if(!v||!pw){le.textContent='Enter your name/email and password.';return;}
+  var email=v.indexOf('@')>=0?v:(v.toLowerCase().replace(/\s+/g,'')+'@millersawshop.local');
+  var btn=document.getElementById('login-btn');if(btn){btn.disabled=true;btn.textContent='Signing in…';}
+  AUTH.signInWithEmailAndPassword(email,pw).then(function(){
+    document.getElementById('login-pass').value='';
+  }).catch(function(e){
+    var code=e&&e.code||'';
+    var msg=(code.indexOf('wrong-password')>=0||code.indexOf('user-not-found')>=0||code.indexOf('invalid-credential')>=0||code.indexOf('invalid-login')>=0)?'Wrong name or password.':((code.indexOf('operation-not-allowed')>=0||code.indexOf('configuration-not-found')>=0)?'Sign-in isn\'t enabled yet — finish the Firebase setup step.':(code.indexOf('too-many-requests')>=0?'Too many attempts — wait a minute and try again.':(code.indexOf('network')>=0?'No connection — check internet and try again.':(e.message||'Sign-in failed.'))));
+    le.textContent=msg;
+  }).then(function(){if(btn){btn.disabled=false;btn.textContent='Sign In';}});
+}
+function doLogout(){if(AUTH){AUTH.signOut();location.reload();}}
 function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();}
 
 function loadIntervalInputs(){
