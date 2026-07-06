@@ -279,10 +279,21 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:14px">Miller Hardware Saw Shop &middot; authorized staff only</div>
   </div>
 </div>
+<div id="guide-overlay" style="display:none;position:fixed;inset:0;z-index:4000;background:var(--off);overflow-y:auto;font-family:'Barlow',sans-serif">
+  <div style="position:sticky;top:0;background:var(--dark);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;z-index:2">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;letter-spacing:.02em">&#128214; Staff Guide</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn sm" onclick="printGuide()">Print</button>
+      <button class="btn sm primary" onclick="closeGuide()">Close</button>
+    </div>
+  </div>
+  <div id="guide-body" style="max-width:720px;margin:0 auto;padding:18px 16px 60px"></div>
+</div>
 <div class="app">
   <div class="topbar">
     <div class="topbar-brand">MILLER <span>HARDWARE</span> <span style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:.06em">SAW SHOP</span></div>
     <div class="topbar-right">
+      <button onclick="openGuide()" title="Staff Guide" style="background:none;border:1px solid #666;color:#eee;font-family:'Barlow',sans-serif;font-size:12px;font-weight:600;padding:4px 11px;border-radius:14px;cursor:pointer">&#128214; Guide</button>
       <div id="sync-pill" class="sync-pill warn"><div class="dot a"></div><span id="sync-txt">Checking...</span></div>
       <div class="tv-pill">True Value</div>
     </div>
@@ -1172,6 +1183,42 @@ function useSuggestedEst(){
   var el=document.getElementById('est-suggest');
   if(el&&el.getAttribute('data-iso'))document.getElementById('m-estdate').value=el.getAttribute('data-iso');
 }
+// ── Staff Guide (in-app onboarding manual) ──────────────────────────────
+function guideSections(){return [
+['1. Signing in',
+ '<p>Open the app on the shop tablet or your phone. Type your <strong>first name</strong> and your <strong>code</strong>, then tap <strong>Sign In</strong>. The app remembers you on that device, so you usually only sign in once.</p><p>On a shared tablet, tap <strong>Sign Out</strong> (in Settings) when you step away.</p>'],
+['2. The tabs, at a glance',
+ '<ul><li><strong>Dashboard</strong> &mdash; every open job at a glance.</li><li><strong>Shop Load</strong> &mdash; jobs grouped by technician.</li><li><strong>Customers</strong> &mdash; search or add customers and see their history.</li><li><strong>&#128222; Pickup &amp; Report</strong> &mdash; who&rsquo;s ready to be called, and who&rsquo;s been waiting.</li><li><strong>Reminders</strong> &mdash; customers due for seasonal service (a quick text brings in work).</li><li><strong>&#128295; Parts to Order</strong> &mdash; parts you need to order, grouped by vendor.</li><li><strong>Work Order Archive</strong> &mdash; every job, past and present.</li><li><strong>Settings</strong> &mdash; your account, plus vendors and techs you can manage.</li></ul>'],
+['3. Taking in a repair (your #1 job)',
+ '<p>When a customer brings something in:</p><ol><li>Tap <strong>+ New Work Order</strong> (red button, or the <strong>+</strong> on your phone).</li><li><strong>Customer:</strong> search their name or phone. New customer? Tap <strong>+ New</strong> and add them.</li><li><strong>Equipment:</strong> pick the type and fill in brand, model, and <strong>serial #</strong> &mdash; the more detail the better (you&rsquo;ll need the serial for warranty).</li><li><strong>What&rsquo;s wrong:</strong> put it in the <em>Customer Complaint</em> box, in their words (&ldquo;won&rsquo;t start&rdquo;, &ldquo;smokes&rdquo;).</li><li><strong>Hang tag #:</strong> write the same number on a paper tag and hang it on the unit.</li><li><strong>Est. Completion:</strong> the app suggests a date based on how busy the shop is &mdash; tap <strong>Use</strong>, or set your own.</li><li>Tap <strong>Save Work Order</strong>, then <strong>Print Work Order</strong>.</li></ol><p>Hand the customer the top <strong>Counter Copy</strong> (their claim ticket); keep the tech sheet with the unit.</p>'],
+['4. Working a repair',
+ '<p>Tap any job to open it. From there you can:</p><ul><li><strong>Update the status</strong> as you go: Intake &rarr; Diagnosing &rarr; In Repair &rarr; Waiting on Parts &rarr; Ready &rarr; Picked Up. Just tap the status buttons.</li><li><strong>Add parts &amp; labor:</strong> type the part + quantity, then <strong>+ Stock Part</strong> (off the shelf) or <strong>+ Stihl / Other Part</strong> (needs ordering).</li><li><strong>Add notes:</strong> type and tap <strong>+ Add Note</strong>, or tap <strong>&#127908;</strong> and just talk &mdash; great for greasy hands.</li><li><strong>Attach photos:</strong> snap the damage or the serial plate.</li><li><strong>Drop-off signature:</strong> tap <strong>Capture</strong> on &ldquo;Drop-off &mdash; Authorizes Diagnosis&rdquo; and have the customer sign.</li></ul>'],
+['5. Ordering parts',
+ '<p>When a part needs ordering it shows up in <strong>&#128295; Parts to Order</strong>, grouped by vendor. Pick the vendor from the dropdown, place the order, and tap <strong>Order &rarr; Received</strong> when it arrives. Need a new vendor? Add one right there or in Settings.</p>'],
+['6. Keeping the customer informed',
+ '<p>From any job:</p><ul><li><strong>&#128241; Text Customer</strong> &mdash; opens a pre-filled text (ready-for-pickup or a general update).</li><li>The text includes a <strong>Track My Repair</strong> link &mdash; the customer taps it to watch their status any time, no phone calls.</li><li><strong>Log Contact</strong> &mdash; jot down when you called or texted so everyone&rsquo;s on the same page.</li></ul>'],
+['7. Finishing up (pickup)',
+ '<ol><li>Set the status to <strong>Ready</strong>.</li><li>Tap <strong>&#128241; Text Customer</strong> to let them know.</li><li>When they arrive, tap <strong>Capture</strong> on &ldquo;Pickup &mdash; Received Equipment&rdquo; and have them sign.</li><li><strong>Print</strong> if they want a receipt.</li><li>Set the status to <strong>Picked Up</strong> &mdash; it moves out of the active lists.</li></ol>'],
+['8. Your daily rhythm',
+ '<p>Start the day on the <strong>Dashboard</strong> to see what&rsquo;s open. Check <strong>&#128222; Pickup &amp; Report</strong> for who to call and who&rsquo;s been waiting. Glance at <strong>Reminders</strong> for customers due for seasonal service. A couple of quick texts each morning keeps work flowing.</p>'],
+['9. Handy tips',
+ '<ul><li><strong>Find a customer fast</strong> &mdash; search by name or phone in the Customers tab.</li><li><strong>Rush job?</strong> Flag it <strong>Urgent</strong> &mdash; it pins to the top.</li><li><strong>Scan the QR</strong> on a tech sheet to jump straight to that job.</li><li><strong>Add to home screen</strong> &mdash; so the app opens like any other on your phone.</li><li>Everything <strong>syncs live</strong> &mdash; what you change, everyone sees instantly.</li></ul>'],
+['10. What&rsquo;s owner-only',
+ '<p>A few things are set by Mike: <strong>shop settings</strong>, the customer-tracker on/off, and <strong>deleting</strong> jobs. If you need one of those, just ask him. Everything else &mdash; work orders, customers, parts, vendors, and techs &mdash; is yours to run.</p>']
+];}
+function buildGuideHTML(forPrint){
+  var intro=forPrint
+    ?'<div style="border:2px solid #1a1a1a;border-radius:6px;padding:14px 16px;margin-bottom:16px"><div style="font-size:17px;font-weight:800;margin-bottom:5px">Miller Saw Shop &mdash; Staff Guide</div><div style="font-size:13px;line-height:1.5">This app tracks every piece of equipment in the shop, from drop-off to pickup. Every saw, mower, trimmer, and generator gets a work order here. Your job is to keep each one moving and keep the customer informed.</div></div>'
+    :'<div style="background:var(--dark);color:#fff;border-radius:8px;padding:18px 20px;margin-bottom:16px"><div style="font-size:18px;font-weight:800;margin-bottom:6px">Welcome to the Saw Shop app &#128075;</div><div style="font-size:14px;line-height:1.6;color:#ddd">This app tracks every piece of equipment in the shop &mdash; from drop-off to pickup. Every saw, mower, trimmer, and generator gets a <strong style="color:#fff">work order</strong> here, and your job is to keep each one moving and keep the customer informed. Read through the sections once, then tap <strong style="color:#fff">&#128214; Guide</strong> up top any time for a refresher.</div></div>';
+  var secs=guideSections().map(function(s){
+    if(forPrint)return '<div style="margin-bottom:13px;page-break-inside:avoid"><div style="font-weight:800;font-size:15px;border-bottom:1.5px solid #ccc;padding-bottom:3px;margin-bottom:6px">'+s[0]+'</div><div style="font-size:12px;line-height:1.5;color:#333">'+s[1]+'</div></div>';
+    return '<details style="background:#fff;border:1.5px solid var(--silver);border-radius:6px;margin-bottom:8px"><summary style="cursor:pointer;padding:12px 14px;font-weight:700;font-size:15px;color:var(--dark)">'+s[0]+'</summary><div style="padding:0 15px 14px;font-size:14px;line-height:1.6;color:var(--gray2)">'+s[1]+'</div></details>';
+  }).join('');
+  return intro+secs;
+}
+function openGuide(){var b=document.getElementById('guide-body');if(b)b.innerHTML=buildGuideHTML(false);var g=document.getElementById('guide-overlay');if(g){g.style.display='block';g.scrollTop=0;}}
+function closeGuide(){var g=document.getElementById('guide-overlay');if(g)g.style.display='none';}
+function printGuide(){var pa=document.getElementById('print-area');pa.innerHTML='<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:22px;color:#1a1a1a">'+buildGuideHTML(true)+'</div>';pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
