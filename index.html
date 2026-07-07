@@ -310,8 +310,8 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
   <div class="navbar">
     <div class="tabs">
-      <div class="tab active" onclick="showTab('dash')">Dashboard</div>
-      <div class="tab" onclick="showTab('board')">Shop Load</div>
+      <div class="tab" onclick="showTab('dash')">Dashboard</div>
+      <div class="tab active" onclick="showTab('board')">Shop Load</div>
       <div class="tab" onclick="showTab('customers')">Customers</div>
       <div class="tab" onclick="showTab('daily')">📞 Pickup &amp; Report</div>
       <div class="tab" onclick="showTab('reminders')">Reminders <span class="tab-badge" id="reminder-badge" style="display:none">0</span></div>
@@ -322,7 +322,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <button class="btn primary" onclick="openNewWO()">+ New Work Order</button>
   </div>
 
-  <div class="view active" id="tab-dash">
+  <div class="view" id="tab-dash">
     <div class="stat-row">
       <div class="stat"><div class="lbl">Open Orders</div><div class="val" id="s-open">—</div></div>
       <div class="stat urg"><div class="lbl">Priority</div><div class="val" id="s-urg">—</div></div>
@@ -342,7 +342,20 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div id="dash-list"><div class="empty">Loading...</div></div>
   </div>
 
-  <div class="view" id="tab-board">
+  <div class="view active" id="tab-board">
+    <div class="srow" style="margin-bottom:8px">
+      <select id="board-loc-f" onchange="this.dataset.touched=1;renderBoard()" style="min-width:160px;flex:0 1 auto">
+        <option value="">All Locations</option>
+        <option value="Yellville">Yellville</option>
+        <option value="Harrison">Harrison</option>
+      </select>
+    </div>
+    <div class="stat-row" style="margin-bottom:10px">
+      <div class="stat"><div class="lbl">Open Orders</div><div class="val" id="b-open">0</div></div>
+      <div class="stat"><div class="lbl">Priority</div><div class="val" id="b-urg" style="color:var(--red)">0</div></div>
+      <div class="stat"><div class="lbl">Waiting on Parts</div><div class="val" id="b-parts" style="color:#BA7517">0</div></div>
+      <div class="stat"><div class="lbl">Ready for Pickup</div><div class="val" id="b-ready" style="color:#2d7d1e">0</div></div>
+    </div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs.</div>
     <div class="board-wrap"><div class="board" id="board-inner"></div></div>
   </div>
@@ -1051,7 +1064,7 @@ function applyRole(){
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
-function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();}
+function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();syncBoardLoc();}
 // Location for new work orders. Priority: this-device override (if set) -> your account's home store (MY_STORE) -> Yellville.
 var MY_STORE=null;
 function getDeviceOverride(){try{return localStorage.getItem('sawshop_device_location')||'';}catch(e){return '';}}
@@ -1066,7 +1079,8 @@ function loadMyStore(){
     else{promptMyStore();}
   });
 }
-function syncMyStoreUI(){var el=document.getElementById('my-store');if(el&&MY_STORE)el.value=MY_STORE;}
+function syncMyStoreUI(){var el=document.getElementById('my-store');if(el&&MY_STORE)el.value=MY_STORE;syncBoardLoc();}
+function syncBoardLoc(){var b=document.getElementById('board-loc-f');if(!b||b.dataset.touched)return;var d=getDeviceOverride()||MY_STORE;if(d&&b.value!==d){b.value=d;renderBoard();}}
 function promptMyStore(){var p=document.getElementById('store-prompt');if(p)p.style.display='flex';}
 function setMyStore(loc){if(loc!=='Yellville'&&loc!=='Harrison')return;MY_STORE=loc;if(DB&&CURRENT_USER)DB.ref('staff_locations/'+CURRENT_USER.uid).set(loc);var p=document.getElementById('store-prompt');if(p)p.style.display='none';syncMyStoreUI();}
 function saveMyStore(){var el=document.getElementById('my-store');if(el)setMyStore(el.value);}
@@ -1132,7 +1146,13 @@ function renderDash(){
 
 function renderBoard(){
   var el=document.getElementById('board-inner');if(!el)return;
-  var open=orderArr().filter(function(o){return o.status!=='Picked Up';});
+  var locF=(document.getElementById('board-loc-f')||{}).value||'';
+  var open=orderArr().filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF);});
+  var st=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+  st('b-open',open.length);
+  st('b-urg',open.filter(function(o){return o.urgent;}).length);
+  st('b-parts',open.filter(function(o){return o.status==='Waiting on Parts';}).length);
+  st('b-ready',open.filter(function(o){return o.status==='Ready';}).length);
   var allTechs=['Unassigned'].concat(TECHS);
   el.innerHTML=allTechs.map(function(tech){
     var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;});
