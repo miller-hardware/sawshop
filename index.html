@@ -409,6 +409,14 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
     <div class="card">
+      <div class="card-hdr">This Device&rsquo;s Location</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">New work orders on this tablet/phone default to this store. Saved on this device only &mdash; set the Harrison tablet to Harrison, the Yellville one to Yellville.</div>
+      <select id="device-location" onchange="saveDeviceLocation()" style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:14px;font-family:'Barlow',sans-serif;background:var(--white);color:var(--dark)">
+        <option>Yellville</option>
+        <option>Harrison</option>
+      </select>
+    </div>
+    <div class="card">
       <div class="card-hdr">Parts Vendor Management</div>
       <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Vendors show as a dropdown on each part in the Parts to Order lists, so the orderer can pick who to order from.</div>
       <div id="vendor-chips" style="margin-bottom:10px"></div>
@@ -1023,7 +1031,11 @@ function applyRole(){
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
-function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();}
+function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();}
+// Per-device home location: new work orders default to this store (saved on this device only)
+function getDeviceLocation(){try{return localStorage.getItem('sawshop_device_location')||'Yellville';}catch(e){return 'Yellville';}}
+function saveDeviceLocation(){var el=document.getElementById('device-location');if(!el)return;try{localStorage.setItem('sawshop_device_location',el.value);}catch(e){}}
+function loadDeviceLocation(){var el=document.getElementById('device-location');if(el)el.value=getDeviceLocation();}
 
 function loadIntervalInputs(){
   document.getElementById('si-chainsaw').value=SVC_INTERVALS.chainsaw;
@@ -1223,7 +1235,7 @@ function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
   ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
-  document.getElementById('m-location').value='Yellville';
+  document.getElementById('m-location').value=getDeviceLocation();
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
   document.getElementById('m-urg').checked=false;document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
