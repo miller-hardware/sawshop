@@ -993,7 +993,7 @@ function startDataSync(){
 }
 var AUTH=null,CURRENT_USER=null;
 function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
-function hideLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='none';var a=document.querySelector('.app');if(a)a.style.visibility='';}
+function hideLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='none';var a=document.querySelector('.app');if(a)a.style.visibility='';var f=document.querySelector('.fab');if(f)f.style.display='';}
 function doLogin(){
   var v=(document.getElementById('login-user').value||'').trim();
   var pw=document.getElementById('login-pass').value||'';
