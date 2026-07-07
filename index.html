@@ -289,6 +289,16 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
   <div id="guide-body" style="max-width:720px;margin:0 auto;padding:18px 16px 60px"></div>
 </div>
+<div id="store-prompt" style="display:none;position:fixed;inset:0;z-index:4500;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:20px;font-family:'Barlow',sans-serif">
+  <div style="background:#fff;border-radius:10px;padding:26px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+    <div style="font-size:19px;font-weight:800;margin-bottom:6px">Which store do you work at?</div>
+    <div style="font-size:13px;color:var(--gray2);margin-bottom:18px">We&rsquo;ll default your new work orders to this store. You can change it later in Settings.</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn primary" style="flex:1;justify-content:center;padding:13px" onclick="setMyStore('Yellville')">Yellville</button>
+      <button class="btn primary" style="flex:1;justify-content:center;padding:13px" onclick="setMyStore('Harrison')">Harrison</button>
+    </div>
+  </div>
+</div>
 <div class="app">
   <div class="topbar">
     <div class="topbar-brand">MILLER <span>HARDWARE</span> <span style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:.06em">SAW SHOP</span></div>
@@ -409,11 +419,20 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
     <div class="card">
-      <div class="card-hdr">This Device&rsquo;s Location</div>
-      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">New work orders on this tablet/phone default to this store. Saved on this device only &mdash; set the Harrison tablet to Harrison, the Yellville one to Yellville.</div>
+      <div class="card-hdr">My Store</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Your home store follows your account to any device you sign in on. New work orders default here.</div>
+      <select id="my-store" onchange="saveMyStore()" style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:14px;font-family:'Barlow',sans-serif;background:var(--white);color:var(--dark)">
+        <option value="Yellville">Yellville</option>
+        <option value="Harrison">Harrison</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="card-hdr">This Device (optional override)</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Leave on <strong>Auto</strong> to follow your account. Only pick a store to lock a shared counter tablet to one location, no matter who signs in.</div>
       <select id="device-location" onchange="saveDeviceLocation()" style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:14px;font-family:'Barlow',sans-serif;background:var(--white);color:var(--dark)">
-        <option>Yellville</option>
-        <option>Harrison</option>
+        <option value="">Auto &mdash; follow my account</option>
+        <option value="Yellville">Always Yellville (this device)</option>
+        <option value="Harrison">Always Harrison (this device)</option>
       </select>
     </div>
     <div class="card">
@@ -984,6 +1003,7 @@ function startDataSync(){
   var ae=document.getElementById('account-email');
   if(ae&&CURRENT_USER){var d=CURRENT_USER.email||'';if(d.indexOf('@millersawshop.local')>0)d=d.split('@')[0];ae.textContent=d;}
   applyRole();
+  loadMyStore();
   boot();
   DB.ref('.info/connected').on('value',function(snap){
     setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
@@ -1032,10 +1052,24 @@ function applyRole(){
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
 function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();}
-// Per-device home location: new work orders default to this store (saved on this device only)
-function getDeviceLocation(){try{return localStorage.getItem('sawshop_device_location')||'Yellville';}catch(e){return 'Yellville';}}
+// Location for new work orders. Priority: this-device override (if set) -> your account's home store (MY_STORE) -> Yellville.
+var MY_STORE=null;
+function getDeviceOverride(){try{return localStorage.getItem('sawshop_device_location')||'';}catch(e){return '';}}
+function defaultLocation(){return getDeviceOverride()||MY_STORE||'Yellville';}
 function saveDeviceLocation(){var el=document.getElementById('device-location');if(!el)return;try{localStorage.setItem('sawshop_device_location',el.value);}catch(e){}}
-function loadDeviceLocation(){var el=document.getElementById('device-location');if(el)el.value=getDeviceLocation();}
+function loadDeviceLocation(){var el=document.getElementById('device-location');if(el)el.value=getDeviceOverride();}
+function loadMyStore(){
+  if(!DB||!CURRENT_USER)return;
+  DB.ref('staff_locations/'+CURRENT_USER.uid).once('value',function(s){
+    var v=s.val();
+    if(v==='Yellville'||v==='Harrison'){MY_STORE=v;syncMyStoreUI();}
+    else{promptMyStore();}
+  });
+}
+function syncMyStoreUI(){var el=document.getElementById('my-store');if(el&&MY_STORE)el.value=MY_STORE;}
+function promptMyStore(){var p=document.getElementById('store-prompt');if(p)p.style.display='flex';}
+function setMyStore(loc){if(loc!=='Yellville'&&loc!=='Harrison')return;MY_STORE=loc;if(DB&&CURRENT_USER)DB.ref('staff_locations/'+CURRENT_USER.uid).set(loc);var p=document.getElementById('store-prompt');if(p)p.style.display='none';syncMyStoreUI();}
+function saveMyStore(){var el=document.getElementById('my-store');if(el)setMyStore(el.value);}
 
 function loadIntervalInputs(){
   document.getElementById('si-chainsaw').value=SVC_INTERVALS.chainsaw;
@@ -1198,7 +1232,7 @@ function useSuggestedEst(){
 // ── Staff Guide (in-app onboarding manual) ──────────────────────────────
 function guideSections(){return [
 ['1. Signing in',
- '<p>Open the app on the shop tablet or your phone. Type your <strong>first name</strong> and your <strong>code</strong>, then tap <strong>Sign In</strong>. The app remembers you on that device, so you usually only sign in once.</p><p>On a shared tablet, tap <strong>Sign Out</strong> (in Settings) when you step away.</p>'],
+ '<p>Open the app on the shop tablet or your phone. Type your <strong>first name</strong> and your <strong>code</strong>, then tap <strong>Sign In</strong>. The app remembers you on that device, so you usually only sign in once.</p><p><strong>First time signing in?</strong> The app asks which store you work at &mdash; pick yours. After that it remembers your store and follows you to every device automatically, so new work orders always default to the right location.</p><p>On a shared tablet, tap <strong>Sign Out</strong> (in Settings) when you step away.</p>'],
 ['2. The tabs, at a glance',
  '<ul><li><strong>Dashboard</strong> &mdash; every open job at a glance.</li><li><strong>Shop Load</strong> &mdash; jobs grouped by technician.</li><li><strong>Customers</strong> &mdash; search or add customers and see their history.</li><li><strong>&#128222; Pickup &amp; Report</strong> &mdash; who&rsquo;s ready to be called, and who&rsquo;s been waiting.</li><li><strong>Reminders</strong> &mdash; customers due for seasonal service (a quick text brings in work).</li><li><strong>&#128295; Parts to Order</strong> &mdash; parts you need to order, grouped by vendor.</li><li><strong>Work Order Archive</strong> &mdash; every job, past and present.</li><li><strong>Settings</strong> &mdash; your account, plus vendors and techs you can manage.</li></ul>'],
 ['3. Taking in a repair (your #1 job)',
@@ -1235,7 +1269,7 @@ function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateCustSel();populateTechSels();
   ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
-  document.getElementById('m-location').value=getDeviceLocation();
+  document.getElementById('m-location').value=defaultLocation();
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
   document.getElementById('m-urg').checked=false;document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
