@@ -1011,7 +1011,7 @@ function doLogin(){
 }
 function doLogout(){if(AUTH){AUTH.signOut();location.reload();}}
 // ── Roles: master (admin) vs shop staff. Admin = one of these emails; everyone else who signs in = staff. ──
-var ADMIN_EMAILS=['mike_millerhardware@outlook.com'];
+var ADMIN_EMAILS=['mike_millerhardware@outlook.com','jake@millersawshop.local','michael@millersawshop.local'];
 function isAdmin(){return !!(CURRENT_USER&&CURRENT_USER.email&&ADMIN_EMAILS.indexOf(CURRENT_USER.email.toLowerCase())>=0);}
 function applyRole(){
   var admin=isAdmin();
