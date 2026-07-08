@@ -310,7 +310,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
   <div class="navbar">
     <div class="tabs">
-      <div class="tab" onclick="showTab('dash')">Dashboard</div>
       <div class="tab active" onclick="showTab('board')">Shop Load</div>
       <div class="tab" onclick="showTab('customers')">Customers</div>
       <div class="tab" onclick="showTab('daily')">📞 Pickup &amp; Report</div>
@@ -322,25 +321,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <button class="btn primary" onclick="openNewWO()">+ New Work Order</button>
   </div>
 
-  <div class="view" id="tab-dash">
-    <div class="stat-row">
-      <div class="stat"><div class="lbl">Open Orders</div><div class="val" id="s-open">—</div></div>
-      <div class="stat urg"><div class="lbl">Priority</div><div class="val" id="s-urg">—</div></div>
-      <div class="stat parts-stat"><div class="lbl">Waiting on Parts</div><div class="val" id="s-parts">—</div></div>
-      <div class="stat"><div class="lbl">Ready for Pickup</div><div class="val" id="s-ready">—</div></div>
-      <div class="stat"><div class="lbl">Completed</div><div class="val" id="s-done">—</div></div>
-    </div>
-    <div id="dash-season-banner"></div>
-    <div class="srow" style="margin-bottom:8px">
-      <select id="dash-loc-f" onchange="renderDash()" style="min-width:160px">
-        <option value="">All Locations</option>
-        <option value="Yellville">Yellville</option>
-        <option value="Harrison">Harrison</option>
-      </select>
-    </div>
-    <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Active Orders</div>
-    <div id="dash-list"><div class="empty">Loading...</div></div>
-  </div>
 
   <div class="view active" id="tab-board">
     <div class="srow" style="margin-bottom:8px">
@@ -355,6 +335,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="stat"><div class="lbl">Priority</div><div class="val" id="b-urg" style="color:var(--red)">0</div></div>
       <div class="stat"><div class="lbl">Waiting on Parts</div><div class="val" id="b-parts" style="color:#BA7517">0</div></div>
       <div class="stat"><div class="lbl">Ready for Pickup</div><div class="val" id="b-ready" style="color:#2d7d1e">0</div></div>
+      <div class="stat"><div class="lbl">Completed</div><div class="val" id="b-done">0</div></div>
     </div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs.</div>
     <div class="board-wrap"><div class="board" id="board-inner"></div></div>
@@ -918,8 +899,8 @@ function renderReminders(){
   if(overdueCount>0){badge.style.display='';badge.textContent=overdueCount;}else{badge.style.display='none';}
   var season=getSeason();
   var bannerHtml='<div class="season-banner '+season.cls+'"><strong>'+season.name+' Season:</strong> '+season.msg+'</div>';
-  var b1=document.getElementById('reminder-season-banner'),b2=document.getElementById('dash-season-banner');
-  if(b1)b1.innerHTML=bannerHtml;if(b2)b2.innerHTML=bannerHtml;
+  var b1=document.getElementById('reminder-season-banner');
+  if(b1)b1.innerHTML=bannerHtml;
   var el=document.getElementById('reminders-list');
   if(!el)return;
   if(!filtered.length){el.innerHTML='<div class="empty">No reminders right now — you\'re all caught up.</div>';return;}
@@ -1022,7 +1003,7 @@ function startDataSync(){
     setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
   });
   DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
-  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderDash();renderOrders();tryOpenWO();});
+  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderBoard();renderOrders();tryOpenWO();});
   DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
   DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
   DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
@@ -1030,7 +1011,7 @@ function startDataSync(){
   DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
   DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();if(isAdmin())DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
   DB.ref('svcIntervals').on('value',function(s){var v=s.val();if(v){SVC_INTERVALS=Object.assign(SVC_INTERVALS,v);loadIntervalInputs();renderReminders();}});
-  DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderDash();});
+  DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderBoard();});
 }
 var AUTH=null,CURRENT_USER=null;
 function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
@@ -1121,10 +1102,10 @@ function populateCustSel(){/* replaced by custSearch */}
 function orderArr(){return Object.values(ORDERS).sort(function(a,b){if(b.urgent!==a.urgent)return(b.urgent?1:0)-(a.urgent?1:0);var da=a.dateIn||'',db=b.dateIn||'';if(da&&db)return da<db?-1:da>db?1:0;return a.woNum-b.woNum;});}
 function custArr(){return Object.values(CUSTS).sort(function(a,b){return(a.last||'').localeCompare(b.last||'');});}
 function custEquip(cid){return EQUIPMENT[cid]||[];}
-function refreshAll(){renderDash();renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
+function refreshAll(){renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
 
 function showTab(t){
-  var tabs=['dash','board','customers','daily','reminders','parts','orders','settings'];
+  var tabs=['board','customers','daily','reminders','parts','orders','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
@@ -1134,25 +1115,19 @@ function showTab(t){
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
 
-function renderDash(){
-  var locF=(document.getElementById('dash-loc-f')||{}).value||'';
-  var all=orderArr(),open=all.filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF);}),urg=open.filter(function(o){return o.urgent;}),parts=open.filter(function(o){return o.status==='Waiting on Parts';}),ready=open.filter(function(o){return o.status==='Ready';}),done=all.filter(function(o){return o.status==='Picked Up'&&(!locF||o.location===locF);});
-  document.getElementById('s-open').textContent=open.length;document.getElementById('s-urg').textContent=urg.length;
-  document.getElementById('s-parts').textContent=parts.length;document.getElementById('s-ready').textContent=ready.length;document.getElementById('s-done').textContent=done.length;
-  var el=document.getElementById('dash-list');
-  if(!open.length){el.innerHTML='<div class="empty">No active orders.</div>';return;}
-  el.innerHTML=open.map(function(o){return woRow(o,CUSTS[o.custId]||{});}).join('');
-}
 
 function renderBoard(){
   var el=document.getElementById('board-inner');if(!el)return;
   var locF=(document.getElementById('board-loc-f')||{}).value||'';
-  var open=orderArr().filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF);});
+  var all=orderArr();
+  var open=all.filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF);});
+  var done=all.filter(function(o){return o.status==='Picked Up'&&(!locF||o.location===locF);});
   var st=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
   st('b-open',open.length);
   st('b-urg',open.filter(function(o){return o.urgent;}).length);
   st('b-parts',open.filter(function(o){return o.status==='Waiting on Parts';}).length);
   st('b-ready',open.filter(function(o){return o.status==='Ready';}).length);
+  st('b-done',done.length);
   var allTechs=['Unassigned'].concat(TECHS);
   el.innerHTML=allTechs.map(function(tech){
     var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;});
@@ -2111,7 +2086,7 @@ function saveAgeSettings(){
   SETTINGS.ageWarnDays=parseInt(document.getElementById('age-warn-days').value)||7;
   SETTINGS.ageOldDays=parseInt(document.getElementById('age-old-days').value)||14;
   if(DB){DB.ref('settings').set(SETTINGS);}else{saveLocal();}
-  renderOrders();renderDash();
+  renderOrders();renderBoard();
 }
 function loadAgeInputs(){
   var w=document.getElementById('age-warn-days'),o=document.getElementById('age-old-days');
