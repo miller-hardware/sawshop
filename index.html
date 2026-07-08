@@ -475,16 +475,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
 
-    <!-- ADMIN SECTION — hidden behind access code -->
-    <div id="admin-locked" style="margin-top:8px">
-      <div style="display:flex;align-items:center;gap:10px;padding:15px 18px;background:var(--off);border:1.5px solid var(--silver);border-radius:3px">
-        <span style="font-size:13px;color:var(--muted);flex:1">Admin settings (technicians, Firebase) are protected.</span>
-        <input type="password" id="admin-code-input" placeholder="Access code" style="width:120px;padding:7px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:14px;font-family:Barlow,sans-serif" onkeydown="if(event.key==='Enter')checkAdminCode()">
-        <button class="btn sm primary" onclick="checkAdminCode()">Unlock</button>
-      </div>
-      <div id="admin-code-msg" style="font-size:12px;color:var(--red);padding:4px 14px;display:none">Incorrect code.</div>
-    </div>
-
     <div id="admin-unlocked" style="display:none">
       <div class="card">
         <div class="card-hdr">Firebase Cloud Sync</div>
@@ -503,24 +493,6 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
 </div>
 
-<!-- DELETE CONFIRM MODAL -->
-<div class="modal-bg" id="del-modal" style="z-index:300">
-<div class="modal" style="max-width:360px">
-  <div class="modal-title" style="color:var(--red)">Confirm Delete</div>
-  <div id="del-modal-msg" style="font-size:14px;color:var(--gray2);margin-bottom:14px">This cannot be undone.</div>
-  <div class="f">
-    <label>Enter access code to confirm</label>
-    <input type="password" id="del-code-input" placeholder="Access code"
-      style="font-size:18px;letter-spacing:4px;text-align:center"
-      onkeydown="if(event.key==='Enter')confirmDelete()">
-  </div>
-  <div id="del-code-msg" style="font-size:12px;color:var(--red);margin-bottom:8px;display:none">Incorrect code.</div>
-  <div class="mfoot">
-    <button class="btn" onclick="closeM('del-modal')">Cancel</button>
-    <button class="btn del" onclick="confirmDelete()">Delete</button>
-  </div>
-</div>
-</div>
 <button class="fab" onclick="openNewWO()" aria-label="New Work Order">+</button>
 <!-- WORK ORDER MODAL -->
 <div class="modal-bg" id="wo-modal">
@@ -991,11 +963,17 @@ function initFB(){
     showLogin();
   }
 }
+function myDisplayName(){
+  if(!CURRENT_USER||!CURRENT_USER.email)return'';
+  var d=CURRENT_USER.email;
+  if(d.indexOf('@millersawshop.local')>0){d=d.split('@')[0];return d.charAt(0).toUpperCase()+d.slice(1);}
+  return d;
+}
 var _synced=false;
 function startDataSync(){
   if(_synced)return;_synced=true;
   var ae=document.getElementById('account-email');
-  if(ae&&CURRENT_USER){var d=CURRENT_USER.email||'';if(d.indexOf('@millersawshop.local')>0)d=d.split('@')[0];ae.textContent=d;}
+  if(ae)ae.textContent=myDisplayName();
   applyRole();
   loadMyStore();
   boot();
@@ -1003,7 +981,7 @@ function startDataSync(){
     setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
   });
   DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
-  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();populateCustSel();renderBoard();renderOrders();tryOpenWO();});
+  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();renderBoard();renderOrders();tryOpenWO();});
   DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
   DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
   DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
@@ -1038,14 +1016,13 @@ function isAdmin(){return !!(CURRENT_USER&&CURRENT_USER.email&&ADMIN_EMAILS.inde
 function applyRole(){
   var admin=isAdmin();
   document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
-  var al=document.getElementById('admin-locked'),au=document.getElementById('admin-unlocked');
-  if(al)al.style.display='none';                       // access-code box retired — never shown
+  var au=document.getElementById('admin-unlocked');
   if(au)au.style.display=admin?'block':'none';
-  if(admin){_adminUnlocked=true;renderTechs();renderVendors();}
+  if(admin){renderTechs();renderVendors();}
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
-function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();populateCustSel();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();syncBoardLoc();}
+function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();syncBoardLoc();}
 // Location for new work orders. Priority: this-device override (if set) -> your account's home store (MY_STORE) -> Yellville.
 var MY_STORE=null;
 function getDeviceOverride(){try{return localStorage.getItem('sawshop_device_location')||'';}catch(e){return '';}}
@@ -1080,7 +1057,7 @@ function deleteOrder(id){if(DB){DB.ref('orders/'+id).remove();DB.ref('public_sta
 function publicStatusFor(o){var c=CUSTS[o.custId]||{};return {woNum:o.woNum||null,first:(c.first||'').trim().split(/\s+/)[0]||'',equip:[o.brand,o.equipType].filter(Boolean).join(' '),status:o.status||'Intake',estDate:o.estDate||'',location:o.location||'Yellville',updated:Date.now()};}
 function writePublicStatus(o){if(DB&&o&&o.id){DB.ref('public_status/'+o.id).set(publicStatusFor(o));}}
 function backfillPublicStatus(){if(!DB)return 0;var n=0;Object.keys(ORDERS).forEach(function(k){var o=ORDERS[k];if(!o.id)o.id=k;writePublicStatus(o);n++;});DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);return n;}
-function writeCust(c){if(DB){DB.ref('customers/'+c.id).set(c);}else{CUSTS[c.id]=c;saveLocal();renderCustomers();populateCustSel();}}
+function writeCust(c){if(DB){DB.ref('customers/'+c.id).set(c);}else{CUSTS[c.id]=c;saveLocal();renderCustomers();}}
 function writeTechs(){if(DB){DB.ref('techs').set(TECHS);}else{saveLocal();}}
 function writeEquipment(cid,eq){if(DB){DB.ref('equipment/'+cid).set(eq);}else{EQUIPMENT[cid]=eq;saveLocal();renderReminders();}}
 function writeAttachments(woid,atts){if(DB){DB.ref('attachments/'+woid).set(atts);}else{ATTACHMENTS[woid]=atts;saveLocal();}}
@@ -1096,7 +1073,6 @@ function addVendor(){var n=document.getElementById('new-vendor').value.trim();if
 function removeVendor(n){if(!confirm('Remove vendor '+n+'?'))return;VENDORS=VENDORS.filter(function(v){return v!==n;});writeVendors();renderVendors();renderPartOrders();}
 function renderVendors(){var el=document.getElementById('vendor-chips');if(!el)return;if(!VENDORS.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">No vendors yet — add your suppliers below.</div>';return;}el.innerHTML='';VENDORS.forEach(function(v){var chip=document.createElement('span');chip.className='tech-chip';chip.appendChild(document.createTextNode(v));var btn=document.createElement('button');btn.innerHTML='&#x2715;';btn.onclick=function(){removeVendor(v);};chip.appendChild(btn);el.appendChild(chip);});}
 function populateTechSels(){['m-tech','wo-tf'].forEach(function(id){var sel=document.getElementById(id);if(!sel)return;var cur=sel.value;sel.innerHTML=id==='m-tech'?'<option>Unassigned</option>':'<option value="">All Techs</option>';TECHS.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);});if(cur)sel.value=cur;});}
-function populateCustSel(){/* replaced by custSearch */}
 
 
 function orderArr(){return Object.values(ORDERS).sort(function(a,b){if(b.urgent!==a.urgent)return(b.urgent?1:0)-(a.urgent?1:0);var da=a.dateIn||'',db=b.dateIn||'';if(da&&db)return da<db?-1:da>db?1:0;return a.woNum-b.woNum;});}
@@ -1137,7 +1113,7 @@ function renderBoard(){
       return '<div class="board-card'+(o.urgent?' urgent':isWaiting?' waiting':'')+'" onclick="openDet(\''+o.id+'\')">'
         +'<div class="bc-wo">#'+o.woNum+'</div><div class="bc-cust">'+(c.first||'')+' '+(c.last||'')+'</div>'
         +'<div class="bc-equip">'+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
-        +'<div class="bc-meta">'+badge(o.status||'Intake')+(o.urgent?'<span class="badge b-urgent">!</span>':'')+'</div>'
+        +'<div class="bc-meta">'+badge(o.status||'Intake')+(o.urgent?'<span class="badge b-urgent">!</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
         +'</div>';
     }).join(''):'<div class="board-empty">No open orders</div>';
     return '<div class="board-col"><div class="board-col-hdr'+(overloaded?' overloaded':'')+'"><span>'+tech+'</span><span class="col-count">'+jobs.length+'</span></div><div class="board-col-body">'+cards+'</div></div>';
@@ -1146,8 +1122,9 @@ function renderBoard(){
 
 function renderOrders(){
   var q=(document.getElementById('wo-q').value||'').toLowerCase(),f=document.getElementById('wo-f').value,tf=document.getElementById('wo-tf').value,lf=document.getElementById('wo-lf').value;
-  var list=orderArr().filter(function(o){var c=CUSTS[o.custId]||{};var txt=((c.first||'')+' '+(c.last||'')+' '+(o.brand||'')+' '+(o.equipType||'')+' '+(o.model||'')+' '+(o.serial||'')+' '+o.woNum).toLowerCase();return(!q||txt.indexOf(q)>=0)&&(!f||o.status===f)&&(!tf||o.tech===tf)&&(!lf||o.location===lf);});
   var el=document.getElementById('wo-list');
+  if(!q&&!f&&!tf&&!lf){el.innerHTML='<div class="empty">Search by name, brand, model, serial, or WO# &mdash; or pick a filter above &mdash; to see results.</div>';return;}
+  var list=orderArr().filter(function(o){var c=CUSTS[o.custId]||{};var txt=((c.first||'')+' '+(c.last||'')+' '+(o.brand||'')+' '+(o.equipType||'')+' '+(o.model||'')+' '+(o.serial||'')+' '+o.woNum).toLowerCase();return(!q||txt.indexOf(q)>=0)&&(!f||o.status===f)&&(!tf||o.tech===tf)&&(!lf||o.location===lf);});
   if(!list.length){el.innerHTML='<div class="empty">No orders found.</div>';return;}
   el.innerHTML=list.map(function(o){return woRow(o,CUSTS[o.custId]||{});}).join('');
 }
@@ -1262,7 +1239,7 @@ function closeGuide(){var g=document.getElementById('guide-overlay');if(g)g.styl
 function printGuide(){var pa=document.getElementById('print-area');pa.innerHTML='<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:22px;color:#1a1a1a">'+buildGuideHTML(true)+'</div>';pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 function openNewWO(){
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
-  populateCustSel();populateTechSels();
+  populateTechSels();
   ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
   document.getElementById('m-location').value=defaultLocation();
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
@@ -1275,7 +1252,7 @@ function openNewWO(){
 function openEditWO(id){
   var o=ORDERS[id];if(!o)return;editWOid=id;
   document.getElementById('wo-mtitle').textContent='Edit WO #'+o.woNum;document.getElementById('wo-del-btn').style.display='';
-  populateCustSel();populateTechSels();
+  populateTechSels();
   setCustById(o.custId||'');document.getElementById('m-tech').value=o.tech||'Unassigned';
   document.getElementById('m-etype').value=o.equipType||'Chainsaw';document.getElementById('m-brand').value=o.brand||'';
   document.getElementById('m-year').value=o.year||'';document.getElementById('m-product').value=o.product||'';document.getElementById('m-model').value=o.model||'';
@@ -1302,7 +1279,7 @@ function saveWO(){
   var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
   var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
   var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
-  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
+  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,intakeBy:prev.intakeBy||myDisplayName(),tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
   writeOrder(o);closeM('wo-modal');
 }
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
@@ -1365,7 +1342,7 @@ function openDet(id){
   var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+o.partsWaiting+'</div>':'';
   var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
   document.getElementById('det-body').innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+o.location+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.tag?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Tag: '+o.tag+'</span>':'')+(o.ticket?' &nbsp;&middot; <span style="font-size:11px;font-weight:400;color:var(--muted)">Ticket #'+o.ticket+'</span>':'')+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div><div style="font-size:21px;font-weight:800">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;color:var(--muted)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;color:var(--muted)">Done: '+o.dateOut+'</div>':'')+(o.location||o.intakeBy?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+(o.location||'')+(o.intakeBy?(o.location?' &middot; ':'')+'Taken in by '+o.intakeBy:'')+'</div>':'')+'<div style="font-size:15px;font-weight:700;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
     +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
@@ -1724,50 +1701,10 @@ function setCustById(cid){
   else{setTimeout(function(){if(CUSTS[cid])custSelect(cid);},500);}
 }
 
-var ADMIN_CODE = '8704495234';
-var _pendingDelete = null;
-
 function requireAdminDelete(msg, fn){
   if(!isAdmin()){alert('Only the shop owner can delete or change this.\n\nAsk Mike to sign in on his account to do it.');return;}
   if(confirm(msg)){fn();}
 }
-function confirmDelete(){
-  var val = document.getElementById('del-code-input').value;
-  if(val !== ADMIN_CODE){
-    var msg = document.getElementById('del-code-msg');
-    msg.style.display = 'block';
-    document.getElementById('del-code-input').value = '';
-    setTimeout(function(){msg.style.display='none';}, 2000);
-    return;
-  }
-  closeM('del-modal');
-  if(_pendingDelete){ _pendingDelete(); _pendingDelete = null; }
-}
-
-var _adminUnlocked = false;
-
-function checkAdminCode(){
-  var val = document.getElementById('admin-code-input').value;
-  var msg = document.getElementById('admin-code-msg');
-  if(val === ADMIN_CODE){
-    _adminUnlocked = true;
-    document.getElementById('admin-locked').style.display = 'none';
-    document.getElementById('admin-unlocked').style.display = 'block';
-    document.getElementById('admin-code-input').value = '';
-    msg.style.display = 'none';
-    renderTechs();renderVendors();
-  } else {
-    msg.style.display = 'block';
-    document.getElementById('admin-code-input').value = '';
-    setTimeout(function(){msg.style.display='none';}, 2000);
-  }
-}
-function lockAdmin(){
-  _adminUnlocked = false;
-  document.getElementById('admin-locked').style.display = 'block';
-  document.getElementById('admin-unlocked').style.display = 'none';
-}
-
 document.querySelectorAll('.modal-bg').forEach(function(el){el.addEventListener('click',function(e){if(e.target===el)el.classList.remove('open');});});
 function downloadInvoice(id){
   var o=ORDERS[id];if(!o)return;
