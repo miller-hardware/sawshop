@@ -421,6 +421,10 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
     <div class="card">
+      <div class="card-hdr">&#128241; Add to Home Screen</div>
+      <div id="install-box"></div>
+    </div>
+    <div class="card">
       <div class="card-hdr">My Store</div>
       <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Your home store follows your account to any device you sign in on. New work orders default here.</div>
       <select id="my-store" onchange="saveMyStore()" style="padding:7px 10px;border:1.5px solid var(--silver);border-radius:3px;font-size:14px;font-family:'Barlow',sans-serif;background:var(--white);color:var(--dark)">
@@ -1095,6 +1099,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
+  if(t==='settings')renderInstallBox();
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1215,7 +1220,7 @@ function guideSections(){return [
 ['1. Signing in',
  '<p>Open the app on the shop tablet or your phone. Type your <strong>first name</strong> and your <strong>code</strong>, then tap <strong>Sign In</strong>. The app remembers you on that device, so you usually only sign in once.</p><p><strong>First time signing in?</strong> The app asks which store you work at &mdash; pick yours. After that it remembers your store and follows you to every device automatically, so new work orders always default to the right location.</p><p>On a shared tablet, tap <strong>Sign Out</strong> (in Settings) when you step away.</p>'],
 ['2. The tabs, at a glance',
- '<ul><li><strong>Dashboard</strong> &mdash; every open job at a glance.</li><li><strong>Shop Load</strong> &mdash; jobs grouped by technician.</li><li><strong>Customers</strong> &mdash; search or add customers and see their history.</li><li><strong>&#128222; Pickup &amp; Report</strong> &mdash; who&rsquo;s ready to be called, and who&rsquo;s been waiting.</li><li><strong>Reminders</strong> &mdash; customers due for seasonal service (a quick text brings in work).</li><li><strong>&#128295; Parts to Order</strong> &mdash; parts you need to order, grouped by vendor.</li><li><strong>Work Order Archive</strong> &mdash; every job, past and present.</li><li><strong>Settings</strong> &mdash; your account, plus vendors and techs you can manage.</li></ul>'],
+ '<ul><li><strong>Shop Load</strong> &mdash; every open job at a glance, grouped by technician. This is what opens first.</li><li><strong>Customers</strong> &mdash; search or add customers and see their history.</li><li><strong>&#128222; Pickup &amp; Report</strong> &mdash; who&rsquo;s ready to be called, and who&rsquo;s been waiting.</li><li><strong>Reminders</strong> &mdash; customers due for seasonal service (a quick text brings in work).</li><li><strong>&#128295; Parts to Order</strong> &mdash; parts you need to order, grouped by vendor.</li><li><strong>Work Order Archive</strong> &mdash; every job, past and present.</li><li><strong>Settings</strong> &mdash; your account, plus vendors and techs you can manage.</li></ul>'],
 ['3. Taking in a repair (your #1 job)',
  '<p>When a customer brings something in:</p><ol><li>Tap <strong>+ New Work Order</strong> (red button, or the <strong>+</strong> on your phone).</li><li><strong>Customer:</strong> search their name or phone. New customer? Tap <strong>+ New</strong> and add them.</li><li><strong>Equipment:</strong> pick the type and fill in brand, model, and <strong>serial #</strong> &mdash; the more detail the better (you&rsquo;ll need the serial for warranty).</li><li><strong>What&rsquo;s wrong:</strong> put it in the <em>Customer Complaint</em> box, in their words (&ldquo;won&rsquo;t start&rdquo;, &ldquo;smokes&rdquo;).</li><li><strong>Hang tag #:</strong> write the same number on a paper tag and hang it on the unit.</li><li><strong>Est. Completion:</strong> the app suggests a date based on how busy the shop is &mdash; tap <strong>Use</strong>, or set your own.</li><li>Tap <strong>Save Work Order</strong>, then <strong>Print Work Order</strong>.</li></ol><p>Hand the customer the top <strong>Counter Copy</strong> (their claim ticket); keep the tech sheet with the unit.</p>'],
 ['4. Working a repair',
@@ -1227,10 +1232,12 @@ function guideSections(){return [
 ['7. Finishing up (pickup)',
  '<ol><li>Set the status to <strong>Ready</strong>.</li><li>Tap <strong>&#128241; Text Customer</strong> to let them know.</li><li>When they arrive, tap <strong>Capture</strong> on &ldquo;Pickup &mdash; Received Equipment&rdquo; and have them sign.</li><li><strong>Print</strong> if they want a receipt.</li><li>Set the status to <strong>Picked Up</strong> &mdash; it moves out of the active lists.</li></ol>'],
 ['8. Your daily rhythm',
- '<p>Start the day on the <strong>Dashboard</strong> to see what&rsquo;s open. Check <strong>&#128222; Pickup &amp; Report</strong> for who to call and who&rsquo;s been waiting. Glance at <strong>Reminders</strong> for customers due for seasonal service. A couple of quick texts each morning keeps work flowing.</p>'],
+ '<p>Start the day on <strong>Shop Load</strong> to see what&rsquo;s open. Check <strong>&#128222; Pickup &amp; Report</strong> for who to call and who&rsquo;s been waiting. Glance at <strong>Reminders</strong> for customers due for seasonal service. A couple of quick texts each morning keeps work flowing.</p>'],
 ['9. Handy tips',
- '<ul><li><strong>Find a customer fast</strong> &mdash; search by name or phone in the Customers tab.</li><li><strong>Rush job?</strong> Flag it <strong>Urgent</strong> &mdash; it pins to the top.</li><li><strong>Scan the QR</strong> on a tech sheet to jump straight to that job.</li><li><strong>Add to home screen</strong> &mdash; so the app opens like any other on your phone.</li><li>Everything <strong>syncs live</strong> &mdash; what you change, everyone sees instantly.</li></ul>'],
-['10. What&rsquo;s owner-only',
+ '<ul><li><strong>Find a customer fast</strong> &mdash; search by name or phone in the Customers tab.</li><li><strong>Rush job?</strong> Flag it <strong>Urgent</strong> &mdash; it pins to the top.</li><li><strong>Scan the QR</strong> on a tech sheet to jump straight to that job.</li><li><strong>Add this app to your home screen</strong> &mdash; see the next section for exact steps.</li><li>Everything <strong>syncs live</strong> &mdash; what you change, everyone sees instantly.</li></ul>'],
+['10. Get it on your home screen',
+ '<p>Put a Miller Saw Shop icon right on your phone &mdash; it opens full-screen, no browser bar, just like any other app.</p><p><strong>iPhone/iPad (Safari):</strong></p><ol><li>Tap the <strong>Share</strong> icon (square with an up arrow) at the bottom of Safari.</li><li>Scroll down and tap <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong> in the top right. Done.</li></ol><p><strong>Android (Chrome):</strong> tap the <strong>&#8942;</strong> menu, top right, then <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</p><p>Or just open <strong>Settings</strong> in the app &mdash; there&rsquo;s an install box there that walks you through it too, and shows a one-tap button on Android when it&rsquo;s available.</p>'],
+['11. What&rsquo;s owner-only',
  '<p>A few things are set by Mike: <strong>shop settings</strong>, the customer-tracker on/off, and <strong>deleting</strong> jobs. If you need one of those, just ask him. Everything else &mdash; work orders, customers, parts, vendors, and techs &mdash; is yours to run.</p>']
 ];}
 function buildGuideHTML(forPrint){
@@ -2254,6 +2261,39 @@ function buildAppIcons(){
     };
     img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
   }catch(e){}
+}
+// ── PWA: "Add to Home Screen" helper (Settings) ───────────────────────────────
+var deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredInstallPrompt=e;renderInstallBox();});
+window.addEventListener('appinstalled',function(){deferredInstallPrompt=null;renderInstallBox();});
+function isStandaloneApp(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;}
+function isIOS(){return /iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;}
+function clickInstallApp(){
+  if(!deferredInstallPrompt)return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(function(){deferredInstallPrompt=null;renderInstallBox();});
+}
+function renderInstallBox(){
+  var el=document.getElementById('install-box');if(!el)return;
+  if(isStandaloneApp()){
+    el.innerHTML='<div style="background:#eaf7e4;border:1.5px solid #2d7d1e;border-radius:4px;padding:9px 12px;font-size:13px;color:#1a5c0a">&#9989; You\'re using the installed app &mdash; nice, that\'s the easiest way to use this on the job.</div>';
+    return;
+  }
+  if(deferredInstallPrompt){
+    el.innerHTML='<div style="font-size:13px;color:var(--gray2);margin-bottom:10px">One tap and it\'s an icon on your home screen &mdash; opens full-screen, no browser bar, just like any other app.</div>'
+      +'<button class="btn primary" style="width:100%;justify-content:center" onclick="clickInstallApp()">&#128241; Install App</button>';
+    return;
+  }
+  if(isIOS()){
+    el.innerHTML='<div style="font-size:13px;color:var(--gray2);margin-bottom:10px">iPhone/iPad don\'t allow one-tap installs from the page &mdash; three quick taps in Safari does it:</div>'
+      +'<div style="display:flex;flex-direction:column;gap:8px">'
+      +'<div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--dark);color:#fff;border-radius:50%;width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">1</span><span style="font-size:13px;color:var(--dark)">Tap the <strong>Share</strong> icon (square with an up arrow) at the bottom of Safari.</span></div>'
+      +'<div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--dark);color:#fff;border-radius:50%;width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">2</span><span style="font-size:13px;color:var(--dark)">Scroll down and tap <strong>Add to Home Screen</strong>.</span></div>'
+      +'<div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--dark);color:#fff;border-radius:50%;width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">3</span><span style="font-size:13px;color:var(--dark)">Tap <strong>Add</strong> in the top right. Done &mdash; it\'s an icon now.</span></div>'
+      +'</div>';
+    return;
+  }
+  el.innerHTML='<div style="font-size:13px;color:var(--gray2)">Open this page in Chrome on your phone, then look for <strong>Install app</strong> or <strong>Add to Home Screen</strong> in the browser menu (&#8942;).</div>';
 }
 (function(){var q=new URLSearchParams(location.search);var t=q.get('track');if(t){initTracker(t);return;}_openWOonLoad=q.get('wo')||null;buildAppIcons();initFB();})();
 </script>
