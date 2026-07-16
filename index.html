@@ -489,6 +489,17 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 
     <div id="admin-unlocked" style="display:none">
       <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div class="card-hdr" style="margin-bottom:0">&#128202; This Week&rsquo;s Snapshot</div>
+          <button class="btn sm" onclick="printWeeklySnapshot()">Print</button>
+        </div>
+        <div id="weekly-snapshot" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">&#128269; Possible Duplicate Customers</div>
+        <div id="dup-cust-list"><div class="empty" style="padding:6px 0">Checking...</div></div>
+      </div>
+      <div class="card">
         <div class="card-hdr">Firebase Cloud Sync</div>
         <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Firebase config is baked in — connects automatically. Use the button below if you're having connection trouble.</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
@@ -1030,7 +1041,7 @@ function applyRole(){
   document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
   var au=document.getElementById('admin-unlocked');
   if(au)au.style.display=admin?'block':'none';
-  if(admin){renderTechs();renderVendors();}
+  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();}
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
@@ -1089,6 +1100,88 @@ function populateTechSels(){['m-tech','wo-tf'].forEach(function(id){var sel=docu
 
 function orderArr(){return Object.values(ORDERS).sort(function(a,b){if(b.urgent!==a.urgent)return(b.urgent?1:0)-(a.urgent?1:0);var da=a.dateIn||'',db=b.dateIn||'';if(da&&db)return da<db?-1:da>db?1:0;return a.woNum-b.woNum;});}
 function custArr(){return Object.values(CUSTS).sort(function(a,b){return(a.last||'').localeCompare(b.last||'');});}
+// ── Duplicate-customer detection (owner-only, Settings) ──────────────────
+function findDuplicateCustomers(){
+  var byPhone={},byName={};
+  custArr().forEach(function(c){
+    var p=(c.phone||'').replace(/\D/g,'');
+    if(p&&p.length>=7)(byPhone[p]=byPhone[p]||[]).push(c);
+    var n=((c.first||'')+' '+(c.last||'')).trim().toLowerCase().replace(/\s+/g,' ');
+    if(n)(byName[n]=byName[n]||[]).push(c);
+  });
+  var groups=[],seen={};
+  function addGroup(list,reason){
+    if(list.length<2)return;
+    var key=list.map(function(c){return c.id;}).sort().join(',');
+    if(seen[key])return;seen[key]=true;
+    groups.push({reason:reason,customers:list});
+  }
+  Object.keys(byPhone).forEach(function(p){addGroup(byPhone[p],'Same phone number');});
+  Object.keys(byName).forEach(function(n){addGroup(byName[n],'Same name');});
+  return groups;
+}
+// ── Weekly owner snapshot (owner-only, Settings) ──────────────────────────
+function computeWeeklySnapshot(){
+  var now=new Date(),cutoff=new Date(now.getTime()-7*86400000);
+  var all=Object.values(ORDERS);
+  var custOrderCount={};
+  all.forEach(function(o){custOrderCount[o.custId]=(custOrderCount[o.custId]||0)+1;});
+  var takenIn=all.filter(function(o){if(!o.dateIn)return false;var d=new Date(o.dateIn);return !isNaN(d.getTime())&&d>=cutoff;});
+  var completed=all.filter(function(o){if(o.status!=='Picked Up'||!o.dateOut)return false;var d=new Date(o.dateOut);return !isNaN(d.getTime())&&d>=cutoff;});
+  var turns=[];
+  completed.forEach(function(o){
+    if(!o.dateIn)return;
+    var din=new Date(o.dateIn),dout=new Date(o.dateOut);
+    if(isNaN(din.getTime())||isNaN(dout.getTime()))return;
+    var days=Math.round((dout-din)/86400000);
+    if(days>=0&&days<=180)turns.push(days);
+  });
+  var avgTurn=null;
+  if(turns.length){turns.sort(function(a,b){return a-b;});var mid=Math.floor(turns.length/2);avgTurn=turns.length%2?turns[mid]:Math.round((turns[mid-1]+turns[mid])/2);}
+  var eqCounts={};
+  takenIn.forEach(function(o){if(o.equipType)eqCounts[o.equipType]=(eqCounts[o.equipType]||0)+1;});
+  var busiest=Object.keys(eqCounts).sort(function(a,b){return eqCounts[b]-eqCounts[a];})[0]||null;
+  var repeatCount=takenIn.filter(function(o){return (custOrderCount[o.custId]||0)>1;}).length;
+  var repeatPct=takenIn.length?Math.round(100*repeatCount/takenIn.length):null;
+  return {takenIn:takenIn.length,completed:completed.length,avgTurn:avgTurn,turnSample:turns.length,busiest:busiest,busiestCount:busiest?eqCounts[busiest]:0,repeatPct:repeatPct,repeatCount:repeatCount};
+}
+function weeklySnapshotHTML(forPrint){
+  var s=computeWeeklySnapshot();
+  var rows=[
+    ['Taken in this week',s.takenIn],
+    ['Completed this week',s.completed],
+    ['Median turnaround',s.avgTurn!==null?(s.avgTurn+' day'+(s.avgTurn!==1?'s':'')+' (based on '+s.turnSample+' job'+(s.turnSample!==1?'s':'')+')'):'Not enough completed jobs yet'],
+    ['Busiest equipment',s.busiest?(s.busiest+' ('+s.busiestCount+')'):'&mdash;'],
+    ['Repeat customers',s.repeatPct!==null?(s.repeatPct+'% ('+s.repeatCount+' of '+s.takenIn+')'):'&mdash;']
+  ];
+  var rowHtml=rows.map(function(r){
+    return (forPrint
+      ?'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #ccc;font-size:13px"><span>'+r[0]+'</span><strong>'+r[1]+'</strong></div>'
+      :'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--off);font-size:13px"><span style="color:var(--gray2)">'+r[0]+'</span><strong style="color:var(--dark)">'+r[1]+'</strong></div>');
+  }).join('');
+  var title='This Week\'s Snapshot &mdash; trailing 7 days ('+today()+')';
+  return forPrint
+    ?('<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px"><div style="font-size:18px;font-weight:800;margin-bottom:2px">MILLER HARDWARE SAW SHOP</div><div style="font-size:13px;color:#555;margin-bottom:16px">'+title+'</div>'+rowHtml+'</div>')
+    :('<div style="font-size:11px;color:var(--muted);margin-bottom:6px">'+title+'</div>'+rowHtml);
+}
+function renderWeeklySnapshot(){var el=document.getElementById('weekly-snapshot');if(el)el.innerHTML=weeklySnapshotHTML(false);}
+function printWeeklySnapshot(){var pa=document.getElementById('print-area');pa.innerHTML=weeklySnapshotHTML(true);pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
+function renderDupCustomers(){
+  var el=document.getElementById('dup-cust-list');if(!el)return;
+  var groups=findDuplicateCustomers();
+  if(!groups.length){el.innerHTML='<div style="font-size:13px;color:var(--muted);font-style:italic">No likely duplicates found &mdash; customer list looks clean.</div>';return;}
+  el.innerHTML=groups.map(function(g){
+    var rows=g.customers.map(function(c){
+      var n=Object.values(ORDERS).filter(function(o){return o.custId===c.id;}).length;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--off)">'
+        +'<div style="min-width:0"><div style="font-size:13px;font-weight:700">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+(c.phone||'no phone on file')+' &middot; '+n+' work order'+(n!==1?'s':'')+'</div></div>'
+        +'<button class="btn sm" style="flex-shrink:0" onclick="closeM(\'det-modal\');openCustDet(\''+c.id+'\')">View</button>'
+        +'</div>';
+    }).join('');
+    return '<div style="background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:8px 10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#BA7517;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">&#9888; '+g.reason+'</div>'+rows+'</div>';
+  }).join('');
+}
 function custEquip(cid){return EQUIPMENT[cid]||[];}
 function refreshAll(){renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
 
@@ -1099,7 +1192,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
-  if(t==='settings')renderInstallBox();
+  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();}}
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1301,8 +1394,19 @@ function saveWO(){
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
 
 function openNewCust(){editCid=null;document.getElementById('cust-mtitle').textContent='New Customer';['c-first','c-last','c-phone','c-email','c-addr','c-notes'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('cust-modal').classList.add('open');}
+function titleCase(s){
+  if(!s)return s;
+  // Preserve short all-caps abbreviations/initials (e.g. "AR", "J.D.") but tidy normal words/names.
+  return s.split(/(\s+|-)/).map(function(word){
+    if(/^(\s+|-)$/.test(word)||!word)return word;
+    if(/^[A-Z0-9.]{1,3}$/.test(word))return word;              // keep short initials/abbreviations as typed
+    return word.replace(/[a-zA-Z']+/g,function(chunk){
+      return chunk.charAt(0).toUpperCase()+chunk.slice(1).toLowerCase();
+    }).replace(/'([a-z])/g,function(m,c){return "'"+c.toUpperCase();}); // O'Brien-style
+  }).join('');
+}
 function saveCust(){
-  var first=document.getElementById('c-first').value.trim(),last=document.getElementById('c-last').value.trim();
+  var first=titleCase(document.getElementById('c-first').value.trim()),last=titleCase(document.getElementById('c-last').value.trim());
   if(!first&&!last){alert('Please enter a name.');return;}
   var c={id:editCid||genId(),first:first,last:last,phone:document.getElementById('c-phone').value.trim(),email:document.getElementById('c-email').value.trim(),addr:document.getElementById('c-addr').value.trim(),notes:document.getElementById('c-notes').value.trim()};
   var woOpen=document.getElementById('wo-modal').classList.contains('open');
