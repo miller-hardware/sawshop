@@ -501,6 +501,11 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <div id="cust-cleanup-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
       </div>
       <div class="card">
+        <div class="card-hdr">&#128296; Equipment Brand Spelling Cleanup</div>
+        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Fixes known misspellings/casing of your actual brands (Stihl, Husqvarna, Echo, etc.) on work orders and equipment records &mdash; e.g. &ldquo;Sthil&rdquo;, &ldquo;STHIL&rdquo;, &ldquo;sthl&rdquo; all become &ldquo;Stihl&rdquo;. Only touches known brand names on this list, not free-text notes. Shows exactly what would change before anything is saved.</div>
+        <div id="brand-cleanup-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
+      </div>
+      <div class="card">
         <div class="card-hdr">&#128269; Possible Duplicate Customers</div>
         <div id="dup-cust-list"><div class="empty" style="padding:6px 0">Checking...</div></div>
       </div>
@@ -1046,7 +1051,7 @@ function applyRole(){
   document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
   var au=document.getElementById('admin-unlocked');
   if(au)au.style.display=admin?'block':'none';
-  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();}
+  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();}
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
@@ -1171,6 +1176,77 @@ function weeklySnapshotHTML(forPrint){
 }
 function renderWeeklySnapshot(){var el=document.getElementById('weekly-snapshot');if(el)el.innerHTML=weeklySnapshotHTML(false);}
 function printWeeklySnapshot(){var pa=document.getElementById('print-area');pa.innerHTML=weeklySnapshotHTML(true);pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
+// ── One-time cleanup pass: fix known brand-name misspellings/casing on orders + equipment (owner-only, preview-then-apply) ──
+var BRAND_FIXES={
+  'stihl':'Stihl','sthil':'Stihl','sthl':'Stihl','shihl':'Stihl','sithl':'Stihl','sthihl':'Stihl','stihlk':'Stihl','stihol':'Stihl','sthill':'Stihl','stilh':'Stihl',
+  'husqvarna':'Husqvarna','husquvarna':'Husqvarna','husqavarna':'Husqvarna','husqvarnan':'Husqvarna','husqvara':'Husqvarna',
+  'echo':'Echo',
+  'ferris':'Ferris',
+  'shindaiwa':'Shindaiwa','shindawa':'Shindaiwa','shindiwa':'Shindaiwa',
+  'snapper':'Snapper',
+  'troy bilt':'Troy-Bilt','troy built':'Troy-Bilt','troybuilt':'Troy-Bilt','troy-bilt':'Troy-Bilt',
+  'honda':'Honda',
+  'toro':'Toro',
+  'john deere':'John Deere',
+  'craftsman':'Craftsman',
+  'exmark':'Exmark',
+  'generac':'Generac',
+  'hustler':'Hustler',
+  'jonsered':'Jonsered','jonesred':'Jonsered',
+  'mantis':'Mantis',
+  'simpson':'Simpson',
+  'colemab':'Coleman','coleman':'Coleman',
+  'yard machines':'Yard Machines'
+};
+function brandFix(b){var k=(b||'').trim().toLowerCase();return BRAND_FIXES[k]||null;}
+function computeBrandCleanupPreview(){
+  var changes=[];
+  Object.keys(ORDERS).forEach(function(id){
+    var o=ORDERS[id],fixed=brandFix(o.brand);
+    if(fixed&&fixed!==o.brand)changes.push({kind:'order',id:id,woNum:o.woNum,oldBrand:o.brand,newBrand:fixed});
+  });
+  Object.keys(EQUIPMENT).forEach(function(cid){
+    (EQUIPMENT[cid]||[]).forEach(function(e,idx){
+      var fixed=brandFix(e.brand);
+      if(fixed&&fixed!==e.brand){var c=CUSTS[cid]||{};changes.push({kind:'equipment',custId:cid,idx:idx,custName:((c.first||'')+' '+(c.last||'')).trim(),oldBrand:e.brand,newBrand:fixed});}
+    });
+  });
+  return changes;
+}
+function renderBrandCleanup(){
+  var el=document.getElementById('brand-cleanup-box');if(!el)return;
+  var changes=computeBrandCleanupPreview();
+  if(!changes.length){el.innerHTML='<div style="font-size:13px;color:var(--muted);font-style:italic">No known brand misspellings found.</div>';return;}
+  var shown=changes.slice(0,60);
+  var rows=shown.map(function(c){
+    var label=c.kind==='order'?('WO #'+c.woNum):('Equipment on '+(c.custName||'customer'));
+    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)">'+label+': <span style="text-decoration:line-through;color:var(--muted)">'+c.oldBrand+'</span> &rarr; <strong>'+c.newBrand+'</strong></div>';
+  }).join('');
+  var more=changes.length>shown.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">&hellip;and '+(changes.length-shown.length)+' more.</div>':'';
+  el.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--dark)">'+changes.length+' brand name'+(changes.length!==1?'s':'')+' would be fixed:</div>'
+    +'<div style="max-height:260px;overflow-y:auto">'+rows+'</div>'+more
+    +'<button class="btn primary" style="margin-top:10px;width:100%;justify-content:center" onclick="applyBrandCleanup()">Fix These '+changes.length+' Brand Name'+(changes.length!==1?'s':'')+'</button>';
+}
+function applyBrandCleanup(){
+  if(!isAdmin()){alert('Only the shop owner can run this.');return;}
+  var changes=computeBrandCleanupPreview();
+  if(!changes.length)return;
+  if(!confirm('Fix '+changes.length+' brand name'+(changes.length!==1?'s':'')+' (misspellings/casing only — e.g. "Sthil" → "Stihl")?\n\nThis cannot be undone.'))return;
+  var updates={};
+  changes.forEach(function(c){
+    if(c.kind==='order'){
+      updates['orders/'+c.id+'/brand']=c.newBrand;
+      var o=ORDERS[c.id];
+      if(o)updates['public_status/'+c.id+'/equip']=[c.newBrand,o.equipType].filter(Boolean).join(' ');
+    }else{
+      updates['equipment/'+c.custId+'/'+c.idx+'/brand']=c.newBrand;
+    }
+  });
+  DB.ref().update(updates).then(function(){
+    alert('Fixed '+changes.length+' brand name'+(changes.length!==1?'s':'')+'.');
+    renderBrandCleanup();
+  }).catch(function(e){alert('Update failed: '+e.message);});
+}
 // ── One-time cleanup pass: standardize existing customer names + phone numbers (owner-only, preview-then-apply) ──
 function computeCustomerCleanupPreview(){
   var changes=[];
@@ -1285,7 +1361,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
-  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();}}
+  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();}}
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
