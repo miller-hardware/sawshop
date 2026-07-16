@@ -329,6 +329,14 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <option value="Yellville">Yellville</option>
         <option value="Harrison">Harrison</option>
       </select>
+      <select id="board-eq-f" onchange="renderBoard()" style="min-width:160px;flex:0 1 auto">
+        <option value="">All Equipment</option>
+        <option>Chainsaw</option><option>Trimmer / Weedeater</option><option>Mower — Push</option>
+        <option>Mower — Riding</option><option>Zero Turn Mower</option><option>Blower</option>
+        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option>
+        <option>Tiller / Cultivator</option><option>Edger</option><option>Log Splitter</option>
+        <option>Auger</option><option>Other</option>
+      </select>
     </div>
     <div class="stat-row" style="margin-bottom:10px">
       <div class="stat"><div class="lbl">Open Orders</div><div class="val" id="b-open">0</div></div>
@@ -1095,9 +1103,10 @@ function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.d
 function renderBoard(){
   var el=document.getElementById('board-inner');if(!el)return;
   var locF=(document.getElementById('board-loc-f')||{}).value||'';
+  var eqF=(document.getElementById('board-eq-f')||{}).value||'';
   var all=orderArr();
-  var open=all.filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF);});
-  var done=all.filter(function(o){return o.status==='Picked Up'&&(!locF||o.location===locF);});
+  var open=all.filter(function(o){return o.status!=='Picked Up'&&(!locF||o.location===locF)&&(!eqF||o.equipType===eqF);});
+  var done=all.filter(function(o){return o.status==='Picked Up'&&(!locF||o.location===locF)&&(!eqF||o.equipType===eqF);});
   var st=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
   st('b-open',open.length);
   st('b-urg',open.filter(function(o){return o.urgent;}).length);
