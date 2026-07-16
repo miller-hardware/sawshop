@@ -496,6 +496,11 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <div id="weekly-snapshot" style="margin-top:8px"></div>
       </div>
       <div class="card">
+        <div class="card-hdr">&#128203; Customer Name / Phone Cleanup</div>
+        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Standardizes name capitalization and phone format (xxx-xxx-xxxx) across your existing customer list. New entries are already cleaned up automatically &mdash; this is a one-time pass over what's already on file. Shows exactly what would change before anything is saved.</div>
+        <div id="cust-cleanup-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
+      </div>
+      <div class="card">
         <div class="card-hdr">&#128269; Possible Duplicate Customers</div>
         <div id="dup-cust-list"><div class="empty" style="padding:6px 0">Checking...</div></div>
       </div>
@@ -1041,7 +1046,7 @@ function applyRole(){
   document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
   var au=document.getElementById('admin-unlocked');
   if(au)au.style.display=admin?'block':'none';
-  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();}
+  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();}
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
@@ -1166,6 +1171,56 @@ function weeklySnapshotHTML(forPrint){
 }
 function renderWeeklySnapshot(){var el=document.getElementById('weekly-snapshot');if(el)el.innerHTML=weeklySnapshotHTML(false);}
 function printWeeklySnapshot(){var pa=document.getElementById('print-area');pa.innerHTML=weeklySnapshotHTML(true);pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
+// ── One-time cleanup pass: standardize existing customer names + phone numbers (owner-only, preview-then-apply) ──
+function computeCustomerCleanupPreview(){
+  var changes=[];
+  custArr().forEach(function(c){
+    var newFirst=titleCase(c.first||''),newLast=titleCase(c.last||''),newPhone=formatPhone(c.phone||'');
+    if(newFirst!==(c.first||'')||newLast!==(c.last||'')||newPhone!==(c.phone||'')){
+      changes.push({id:c.id,oldFirst:c.first||'',newFirst:newFirst,oldLast:c.last||'',newLast:newLast,oldPhone:c.phone||'',newPhone:newPhone});
+    }
+  });
+  return changes;
+}
+function renderCustomerCleanup(){
+  var el=document.getElementById('cust-cleanup-box');if(!el)return;
+  var changes=computeCustomerCleanupPreview();
+  if(!changes.length){el.innerHTML='<div style="font-size:13px;color:var(--muted);font-style:italic">Everything already looks clean &mdash; no changes needed.</div>';return;}
+  var shown=changes.slice(0,60);
+  var rows=shown.map(function(c){
+    var nameChanged=c.newFirst!==c.oldFirst||c.newLast!==c.oldLast;
+    var phoneChanged=c.newPhone!==c.oldPhone;
+    var bits=[];
+    if(nameChanged)bits.push('<span style="text-decoration:line-through;color:var(--muted)">'+((c.oldFirst||'')+' '+(c.oldLast||'')).trim()+'</span> &rarr; <strong>'+((c.newFirst||'')+' '+(c.newLast||'')).trim()+'</strong>');
+    if(phoneChanged)bits.push('<span style="text-decoration:line-through;color:var(--muted)">'+(c.oldPhone||'&mdash;')+'</span> &rarr; <strong>'+(c.newPhone||'&mdash;')+'</strong>');
+    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)">'+bits.join(' &middot; ')+'</div>';
+  }).join('');
+  var more=changes.length>shown.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">&hellip;and '+(changes.length-shown.length)+' more.</div>':'';
+  el.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--dark)">'+changes.length+' customer'+(changes.length!==1?'s':'')+' would be updated:</div>'
+    +'<div style="max-height:260px;overflow-y:auto">'+rows+'</div>'+more
+    +'<button class="btn primary" style="margin-top:10px;width:100%;justify-content:center" onclick="applyCustomerCleanup()">Apply These '+changes.length+' Change'+(changes.length!==1?'s':'')+'</button>';
+}
+function applyCustomerCleanup(){
+  if(!isAdmin()){alert('Only the shop owner can run this.');return;}
+  var changes=computeCustomerCleanupPreview();
+  if(!changes.length)return;
+  if(!confirm('Update '+changes.length+' customer record'+(changes.length!==1?'s':'')+' with cleaned-up names/phone numbers?\n\nThis cannot be undone.'))return;
+  var updates={},changeById={};
+  changes.forEach(function(c){
+    updates['customers/'+c.id+'/first']=c.newFirst;
+    updates['customers/'+c.id+'/last']=c.newLast;
+    updates['customers/'+c.id+'/phone']=c.newPhone;
+    changeById[c.id]=c;
+  });
+  Object.keys(ORDERS).forEach(function(k){
+    var o=ORDERS[k],c=changeById[o.custId];
+    if(c&&c.newFirst!==c.oldFirst)updates['public_status/'+k+'/first']=c.newFirst.trim().split(/\s+/)[0]||'';
+  });
+  DB.ref().update(updates).then(function(){
+    alert('Updated '+changes.length+' customer record'+(changes.length!==1?'s':'')+'.');
+    renderCustomerCleanup();
+  }).catch(function(e){alert('Update failed: '+e.message);});
+}
 function renderDupCustomers(){
   var el=document.getElementById('dup-cust-list');if(!el)return;
   var groups=findDuplicateCustomers();
@@ -1230,7 +1285,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
-  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();}}
+  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();}}
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1443,10 +1498,17 @@ function titleCase(s){
     }).replace(/'([a-z])/g,function(m,c){return "'"+c.toUpperCase();}); // O'Brien-style
   }).join('');
 }
+function formatPhone(p){
+  if(!p)return p;
+  var d=p.replace(/\D/g,'');
+  if(d.length===11&&d.charAt(0)==='1')d=d.slice(1);
+  if(d.length!==10)return p;                      // don't touch numbers we can't confidently parse (extensions, partial, international, etc.)
+  return d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+}
 function saveCust(){
   var first=titleCase(document.getElementById('c-first').value.trim()),last=titleCase(document.getElementById('c-last').value.trim());
   if(!first&&!last){alert('Please enter a name.');return;}
-  var c={id:editCid||genId(),first:first,last:last,phone:document.getElementById('c-phone').value.trim(),email:document.getElementById('c-email').value.trim(),addr:document.getElementById('c-addr').value.trim(),notes:document.getElementById('c-notes').value.trim()};
+  var c={id:editCid||genId(),first:first,last:last,phone:formatPhone(document.getElementById('c-phone').value.trim()),email:document.getElementById('c-email').value.trim(),addr:document.getElementById('c-addr').value.trim(),notes:document.getElementById('c-notes').value.trim()};
   var woOpen=document.getElementById('wo-modal').classList.contains('open');
   var isNew=!editCid;
   writeCust(c);closeM('cust-modal');
