@@ -1170,7 +1170,7 @@ function renderDupCustomers(){
   var el=document.getElementById('dup-cust-list');if(!el)return;
   var groups=findDuplicateCustomers();
   if(!groups.length){el.innerHTML='<div style="font-size:13px;color:var(--muted);font-style:italic">No likely duplicates found &mdash; customer list looks clean.</div>';return;}
-  el.innerHTML=groups.map(function(g){
+  el.innerHTML=groups.map(function(g,gi){
     var rows=g.customers.map(function(c){
       var n=Object.values(ORDERS).filter(function(o){return o.custId===c.id;}).length;
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--off)">'
@@ -1179,8 +1179,46 @@ function renderDupCustomers(){
         +'<button class="btn sm" style="flex-shrink:0" onclick="closeM(\'det-modal\');openCustDet(\''+c.id+'\')">View</button>'
         +'</div>';
     }).join('');
-    return '<div style="background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:8px 10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#BA7517;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">&#9888; '+g.reason+'</div>'+rows+'</div>';
+    var mergeBtns=g.customers.length===2?('<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
+      +g.customers.map(function(c,i){var other=g.customers[1-i];return '<button class="btn sm primary" onclick="mergeCustomersUI(\''+c.id+'\',\''+other.id+'\')">Merge &rarr; keep &ldquo;'+((c.first||'')+' '+(c.last||'')).trim()+'&rdquo;</button>';}).join('')
+      +'</div>'):'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px">3+ matches &mdash; merge one pair at a time via View, or ask for a multi-way merge.</div>';
+    return '<div style="background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:8px 10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#BA7517;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">&#9888; '+g.reason+'</div>'+rows+mergeBtns+'</div>';
   }).join('');
+}
+// ── Merge two customer records (owner-only): moves all orders + equipment to the kept record, combines notes/contact info, deletes the other. ──
+function mergeCustomersUI(keepId,loseId){
+  if(!isAdmin()){alert('Only the shop owner can merge customers.');return;}
+  var keep=CUSTS[keepId],lose=CUSTS[loseId];
+  if(!keep||!lose){alert('One of these customers could not be found — try reloading.');return;}
+  var moving=Object.keys(ORDERS).filter(function(k){return ORDERS[k].custId===loseId;}).length;
+  var keepName=((keep.first||'')+' '+(keep.last||'')).trim(),loseName=((lose.first||'')+' '+(lose.last||'')).trim();
+  var msg='Merge "'+loseName+'" into "'+keepName+'"?\n\n'
+    +moving+' work order'+(moving!==1?'s':'')+' will move to "'+keepName+'".\n'
+    +'Notes from both will be combined.\n'
+    +'"'+loseName+'" will then be deleted.\n\nThis cannot be undone.';
+  if(!confirm(msg))return;
+  mergeCustomers(keepId,loseId);
+}
+function mergeCustomers(keepId,loseId){
+  var keep=CUSTS[keepId],lose=CUSTS[loseId];
+  if(!keep||!lose||keepId===loseId)return;
+  var merged={id:keepId,first:keep.first||lose.first||'',last:keep.last||lose.last||'',phone:keep.phone||lose.phone||'',email:keep.email||lose.email||'',addr:keep.addr||lose.addr||'',notes:[keep.notes,lose.notes].filter(Boolean).join(keep.notes&&lose.notes?'\n---\n':'')};
+  var ordersToMove=Object.keys(ORDERS).filter(function(k){return ORDERS[k].custId===loseId;});
+  var mergedEquip=(EQUIPMENT[keepId]||[]).concat(EQUIPMENT[loseId]||[]);
+  var updates={};
+  updates['customers/'+keepId]=merged;
+  updates['customers/'+loseId]=null;
+  ordersToMove.forEach(function(k){updates['orders/'+k+'/custId']=keepId;});
+  if(mergedEquip.length)updates['equipment/'+keepId]=mergedEquip;
+  updates['equipment/'+loseId]=null;
+  DB.ref().update(updates).then(function(){
+    ordersToMove.forEach(function(k){
+      var o=ORDERS[k];if(!o)return;
+      writePublicStatus(Object.assign({},o,{id:k,custId:keepId}));
+    });
+    alert('Merged. "'+((lose.first||'')+' '+(lose.last||'')).trim()+'" is now part of "'+((merged.first||'')+' '+(merged.last||'')).trim()+'".');
+    renderDupCustomers();
+  }).catch(function(e){alert('Merge failed: '+e.message);});
 }
 function custEquip(cid){return EQUIPMENT[cid]||[];}
 function refreshAll(){renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
