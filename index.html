@@ -83,6 +83,7 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 .b-complete{background:#e8e8e8;color:#444}
 .b-urgent{background:var(--red);color:#fff}
 .b-sale{background:#1a1a1a;color:#fff}
+.b-service{background:#e6f1fb;color:#0c447c;border:1px solid #85B7EB}
 .b-warranty{background:#eaf3de;color:#1a5c0a}
 .b-warranty-exp{background:#FCEBEB;color:#A32D2D}
 .b-warranty-soon{background:#FAEEDA;color:#633806}
@@ -497,7 +498,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
       <div class="card">
         <div class="card-hdr">&#128295; Log Equipment from Work Order History</div>
-        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Every <em>new</em> work order now automatically logs its equipment on the customer's record, same as &ldquo;Log Equipment / New Unit Sale&rdquo; &mdash; deduped so repeat visits for the same unit don't pile up. This is the one-time catch-up pass for your <em>existing</em> work order history. Shows exactly what would be created before anything is saved.</div>
+        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Every <em>new</em> work order now automatically logs its equipment on the customer's record as &ldquo;Serviced by Miller Hardware&rdquo; &mdash; deduped so repeat visits for the same unit don't pile up. This is the one-time catch-up pass for your <em>existing</em> work order history. Shows exactly what would be created before anything is saved.</div>
         <div id="equip-backfill-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
       </div>
       <div class="card">
@@ -695,6 +696,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="f"><label>Record Type</label>
       <select id="eq-rectype">
         <option value="sale">New unit sale — sold by Miller Hardware</option>
+        <option value="service">Serviced by Miller Hardware</option>
         <option value="existing">Customer-owned — logging for service records</option>
       </select>
     </div>
@@ -1199,7 +1201,7 @@ function computeEquipmentBackfillPreview(){
       if(existingKeys[key]||seenInBatch[key])return;
       seenInBatch[key]=true;
       var c=CUSTS[cid]||{};
-      results.push({custId:cid,custName:((c.first||'')+' '+(c.last||'')).trim(),eq:Object.assign({date:o.dateIn||'',rectype:'sale',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:''},rec),sourceWoNum:o.woNum});
+      results.push({custId:cid,custName:((c.first||'')+' '+(c.last||'')).trim(),eq:Object.assign({date:o.dateIn||'',rectype:'service',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:''},rec),sourceWoNum:o.woNum});
     });
   });
   return results;
@@ -1227,7 +1229,7 @@ function applyEquipmentBackfill(){
   if(!results.length)return;
   var custSet={};results.forEach(function(r){custSet[r.custId]=1;});
   var custCount=Object.keys(custSet).length;
-  if(!confirm('Create '+results.length+' equipment record'+(results.length!==1?'s':'')+' across '+custCount+' customer'+(custCount!==1?'s':'')+', based on work order history?\n\nEach logs as "Sold by Miller Hardware" (same as New Unit Sale) — you can edit any record afterward.\n\nThis cannot be undone.'))return;
+  if(!confirm('Create '+results.length+' equipment record'+(results.length!==1?'s':'')+' across '+custCount+' customer'+(custCount!==1?'s':'')+', based on work order history?\n\nEach logs as "Serviced by Miller Hardware" — you can edit any record afterward.\n\nThis cannot be undone.'))return;
   var byCust={};
   results.forEach(function(r){(byCust[r.custId]=byCust[r.custId]||[]).push(r.eq);});
   var updates={};
@@ -1621,7 +1623,7 @@ function saveWO(){
   var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,intakeBy:prev.intakeBy||myDisplayName(),tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
   writeOrder(o);syncEquipmentFromOrder(o);closeM('wo-modal');
 }
-// ── Every work order automatically logs its equipment on the customer's record (same shape as "Log Equipment / New Unit Sale"), deduped so repeat visits for the same unit don't pile up. ──
+// ── Every work order automatically logs its equipment on the customer's record as "Serviced by Miller Hardware" (same shape as "Log Equipment", different record type than an actual sale), deduped so repeat visits for the same unit don't pile up. ──
 function equipMatchKey(e){
   var serial=(e.serial||'').trim().toLowerCase();
   if(serial)return 'sn:'+serial;
@@ -1634,7 +1636,7 @@ function syncEquipmentFromOrder(o){
   var key=equipMatchKey(rec);
   var existing=EQUIPMENT[o.custId]||[];
   if(existing.some(function(e){return equipMatchKey(e)===key;}))return;   // already on file — don't duplicate or overwrite
-  var eq=Object.assign({date:o.dateIn||today(),rectype:'sale',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:''},rec);
+  var eq=Object.assign({date:o.dateIn||today(),rectype:'service',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:''},rec);
   writeEquipment(o.custId,existing.concat([eq]));
 }
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
@@ -1811,7 +1813,14 @@ function viewImg(woid,idx){var a=ATTACHMENTS[woid];if(!a||!a[idx])return;var src
 
 function openCustDet(id){
   var c=CUSTS[id];if(!c)return;var wos=orderArr().filter(function(o){return o.custId===id;}),eq=custEquip(id);
-  var eqHtml=eq.length?eq.map(function(e,i){var isSale=e.rectype==='sale'||!e.rectype,ws=e.warrantyExp?warrantyStatus(e.warrantyExp):null;return '<div class="equip-card"><div class="eq-badge"><span class="badge '+(isSale?'b-sale':'b-intake')+'">'+(isSale?'Sold by us':'Customer-owned')+'</span>'+(ws?'<span class="badge '+ws.cls+'">'+ws.label+'</span>':'')+'</div><div class="eq-brand">'+(e.brand||'')+' '+(e.type||'')+'</div><div class="eq-detail">'+[e.year?'Year: '+e.year:'',e.product?'Product: '+e.product:'',e.model?'Model: '+e.model:'',e.serial?'SN: '+e.serial:'',e.engine?'Engine: '+e.engine:''].filter(Boolean).join(' &middot; ')+'</div>'+(e.date?'<div class="eq-detail">'+(isSale?'Sold: ':'Logged: ')+e.date+(e.warrantyExp?' &middot; Warranty exp: '+e.warrantyExp:'')+'</div>':'')+(e.warrantyNotes?'<div class="eq-detail">'+e.warrantyNotes+'</div>':'')+(e.notes?'<div class="eq-detail" style="font-style:italic;margin-top:3px">'+e.notes+'</div>':'')+'<div class="eq-actions"><button class="btn sm" onclick="openAddEquip(\''+id+'\','+i+')">Edit</button><button class="btn sm primary" onclick="newWOForCustEquip(\''+id+'\','+i+')">+ Work Order</button></div></div>';}).join(''):'<div class="empty" style="padding:12px 0">No equipment on record.</div>';
+  var eqHtml=eq.length?eq.map(function(e,i){
+    var isSale=e.rectype==='sale'||!e.rectype,isService=e.rectype==='service';
+    var badgeCls=isService?'b-service':(isSale?'b-sale':'b-intake');
+    var badgeLbl=isService?'Serviced by us':(isSale?'Sold by us':'Customer-owned');
+    var datePrefix=isService?'Serviced: ':(isSale?'Sold: ':'Logged: ');
+    var ws=e.warrantyExp?warrantyStatus(e.warrantyExp):null;
+    return '<div class="equip-card"><div class="eq-badge"><span class="badge '+badgeCls+'">'+badgeLbl+'</span>'+(ws?'<span class="badge '+ws.cls+'">'+ws.label+'</span>':'')+'</div><div class="eq-brand">'+(e.brand||'')+' '+(e.type||'')+'</div><div class="eq-detail">'+[e.year?'Year: '+e.year:'',e.product?'Product: '+e.product:'',e.model?'Model: '+e.model:'',e.serial?'SN: '+e.serial:'',e.engine?'Engine: '+e.engine:''].filter(Boolean).join(' &middot; ')+'</div>'+(e.date?'<div class="eq-detail">'+datePrefix+e.date+(e.warrantyExp?' &middot; Warranty exp: '+e.warrantyExp:'')+'</div>':'')+(e.warrantyNotes?'<div class="eq-detail">'+e.warrantyNotes+'</div>':'')+(e.notes?'<div class="eq-detail" style="font-style:italic;margin-top:3px">'+e.notes+'</div>':'')+'<div class="eq-actions"><button class="btn sm" onclick="openAddEquip(\''+id+'\','+i+')">Edit</button><button class="btn sm primary" onclick="newWOForCustEquip(\''+id+'\','+i+')">+ Work Order</button></div></div>';
+  }).join(''):'<div class="empty" style="padding:12px 0">No equipment on record.</div>';
   document.getElementById('det-body').innerHTML='<div style="font-size:17px;font-weight:800;margin-bottom:4px">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:13px;color:var(--muted)">'+c.phone+'</div>':'')+(c.email?'<div style="font-size:13px;color:var(--muted)">'+c.email+'</div>':'')+(c.addr?'<div style="font-size:13px;color:var(--muted)">'+c.addr+'</div>':'')+(c.notes?'<div style="font-size:12px;margin-top:8px;padding:8px;background:var(--off);border-radius:3px">'+c.notes+'</div>':'')+'<div class="sect-lbl">Equipment on File ('+eq.length+')</div>'+eqHtml+'<button class="btn outline sm" onclick="openAddEquip(\''+id+'\')" style="margin-bottom:4px">+ Log Equipment / New Sale</button><div class="sect-lbl">Work Order History ('+wos.length+')</div>'+(wos.length?wos.map(function(o){return woRow(o,c);}).join(''):'<div class="empty" style="padding:12px 0">No orders yet.</div>')+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="editCust(\''+id+'\')">Edit Customer</button><button class="btn primary" onclick="closeM(\'det-modal\');openNewWO();setTimeout(function(){setCustById(\''+id+'\');},100)">+ New Order</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
