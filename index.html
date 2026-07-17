@@ -781,10 +781,43 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 
 <!-- RENTAL CALENDAR MODAL -->
 <div class="modal-bg" id="rental-cal-modal" style="z-index:260">
-<div class="modal" style="max-width:400px">
+<div class="modal" style="max-width:420px">
   <div class="modal-title" id="rental-cal-title">Calendar</div>
   <div id="rental-cal-body"></div>
-  <div class="mfoot"><button class="btn" onclick="closeM('rental-cal-modal')">Close</button></div>
+  <div id="rental-cal-list" style="margin-top:12px"></div>
+  <div class="mfoot"><button class="btn" onclick="closeM('rental-cal-modal')">Close</button><button class="btn primary" onclick="openReserveUnit(_rentalCalUnit)">+ Reserve</button></div>
+</div>
+</div>
+
+<!-- RESERVE UNIT MODAL -->
+<div class="modal-bg" id="rsv-modal" style="z-index:270">
+<div class="modal">
+  <div class="modal-title" id="rsv-mtitle">Reserve Unit</div>
+  <div class="f" style="position:relative">
+    <label>Customer</label>
+    <input type="text" id="rsv-cust-search" placeholder="Search by name or phone..." oninput="rsvCustSearch()" autocomplete="off">
+    <div id="rsv-cust-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--white);border:1.5px solid var(--silver);border-top:none;border-radius:0 0 3px 3px;max-height:180px;overflow-y:auto;z-index:300;font-size:14px"></div>
+    <input type="hidden" id="rsv-cust">
+    <div id="rsv-cust-selected" style="display:none;font-size:13px;color:var(--gray2);padding:4px 0;align-items:center;gap:6px">
+      <span id="rsv-cust-selected-label" style="font-weight:600"></span>
+      <button type="button" onclick="rsvCustClear()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:15px;font-weight:700;padding:0 2px">&#x2715;</button>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="f"><label>Pickup Date</label><input type="date" id="rsv-start"></div>
+    <div class="f"><label>Return Date</label><input type="date" id="rsv-end"></div>
+  </div>
+  <div class="f"><label>Notes</label><input type="text" id="rsv-notes" placeholder="Optional"></div>
+  <div id="rsv-warning" style="display:none;background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:10px 12px;font-size:13px;color:#633806;margin-bottom:10px"></div>
+  <div class="mfoot" id="rsv-mfoot-default">
+    <button class="btn" onclick="closeM('rsv-modal')">Cancel</button>
+    <button class="btn primary" onclick="attemptReservation()">Check &amp; Reserve</button>
+  </div>
+  <div class="mfoot" id="rsv-mfoot-conflict" style="display:none">
+    <button class="btn" onclick="closeM('rsv-modal')">Cancel</button>
+    <button class="btn" onclick="confirmWaitlist()">Add to Waitlist Instead</button>
+    <button class="btn del" onclick="confirmReserveAnyway()">Reserve Anyway</button>
+  </div>
 </div>
 </div>
 
@@ -858,7 +891,7 @@ var FB_BAKED = {
   messagingSenderId: "187757043776",
   appId: "1:187757043776:web:a0cce22b59172da8db7fa5"
 };
-var DB=null,STORAGE=null,ORDERS={},CUSTS={},TECHS=['Michael','Tech 2','Tech 3'],VENDORS=[],EQUIPMENT={},ATTACHMENTS={},CONTACTLOGS={},PARTORDERS={stihl:[],other:[]},RENTAL_UNITS={};
+var DB=null,STORAGE=null,ORDERS={},CUSTS={},TECHS=['Michael','Tech 2','Tech 3'],VENDORS=[],EQUIPMENT={},ATTACHMENTS={},CONTACTLOGS={},PARTORDERS={stihl:[],other:[]},RENTAL_UNITS={},RENTAL_BOOKINGS={},RENTAL_WAITLIST={};
 var editWOid=null,editCid=null,editEqCid=null,editEqIdx=null,contactLogWOid=null,nextWO=1001;
 var activeRFilter='all';
 var SVC_INTERVALS={chainsaw:12,mower:12,generator:24,trimmer:18,other:18};
@@ -1096,6 +1129,8 @@ function startDataSync(){
   DB.ref('svcIntervals').on('value',function(s){var v=s.val();if(v){SVC_INTERVALS=Object.assign(SVC_INTERVALS,v);loadIntervalInputs();renderReminders();}});
   DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderBoard();});
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
+  DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
+  DB.ref('rental_waitlist').on('value',function(s){RENTAL_WAITLIST={};s.forEach(function(ch){RENTAL_WAITLIST[ch.key]=ch.val();});renderRentalCalendar();});
 }
 var AUTH=null,CURRENT_USER=null;
 function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
@@ -1785,6 +1820,7 @@ function renderRentalFleet(){
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
       +'<button class="btn sm" onclick="openEditRentalUnit(\''+u.id+'\')">Edit</button>'
       +'<button class="btn sm" onclick="openRentalCalendar(\''+u.id+'\')">&#128197; Calendar</button>'
+      +'<button class="btn sm primary" onclick="openReserveUnit(\''+u.id+'\')">+ Reserve</button>'
       +'<button class="btn sm" onclick="downloadRentalInvoice(\''+u.id+'\')">&#11015; Invoice</button>'
       +'</div></div>';
   }).join('');
@@ -1828,8 +1864,112 @@ function delRentalUnit(){
   var id=editRUid,sku=(RENTAL_UNITS[id]||{}).sku||'';
   requireAdminDelete('Remove rental unit "'+sku+'"? This cannot be undone.',function(){deleteRentalUnit(id);closeM('rental-unit-modal');});
 }
-// Phase 2 will populate this from real reservation records — every day shows Available until then.
-function getBookingsForUnit(unitId){return [];}
+// ── Reservations (Phase 2) ──────────────────────────────────────────────
+function getBookingsForUnit(unitId){return Object.values(RENTAL_BOOKINGS).filter(function(b){return b.unitId===unitId;}).sort(function(a,b){return a.start.localeCompare(b.start);});}
+function getWaitlistForUnit(unitId){return Object.values(RENTAL_WAITLIST).filter(function(w){return w.unitId===unitId;}).sort(function(a,b){return a.desiredStart.localeCompare(b.desiredStart);});}
+function rangesOverlap(aStart,aEnd,bStart,bEnd){return aStart<=bEnd&&bStart<=aEnd;}
+function findConflict(unitId,start,end){
+  return getBookingsForUnit(unitId).find(function(b){return rangesOverlap(start,end,b.start,b.end);})||null;
+}
+function writeRentalBooking(b){if(DB){DB.ref('rental_bookings/'+b.id).set(b);}else{RENTAL_BOOKINGS[b.id]=b;renderRentalCalendar();}}
+function cancelReservation(id){
+  if(!confirm('Cancel this reservation?'))return;
+  if(DB){DB.ref('rental_bookings/'+id).remove();}else{delete RENTAL_BOOKINGS[id];}
+  renderRentalCalendar();
+}
+function writeWaitlistEntry(w){if(DB){DB.ref('rental_waitlist/'+w.id).set(w);}else{RENTAL_WAITLIST[w.id]=w;renderRentalCalendar();}}
+function removeFromWaitlist(id){
+  if(!confirm('Remove from waitlist?'))return;
+  if(DB){DB.ref('rental_waitlist/'+id).remove();}else{delete RENTAL_WAITLIST[id];}
+  renderRentalCalendar();
+}
+function rsvCustSearch(){
+  var q=(document.getElementById('rsv-cust-search').value||'').toLowerCase().trim();
+  var res=document.getElementById('rsv-cust-results');
+  if(!q){res.style.display='none';return;}
+  var isPhone=/^[\d\s\-\(\)]+$/.test(q)&&q.replace(/\D/g,'').length>=3;
+  var matches=custArr().filter(function(c){
+    if(isPhone){return (c.phone||'').replace(/\D/g,'').indexOf(q.replace(/\D/g,''))>=0;}
+    var fn=(c.first||'').toLowerCase(),ln=(c.last||'').toLowerCase();
+    var parts=q.split(/\s+/);
+    if(parts.length>=2)return(fn.indexOf(parts[0])>=0&&ln.indexOf(parts[1])>=0)||(fn.indexOf(parts[1])>=0&&ln.indexOf(parts[0])>=0);
+    return fn.indexOf(q)>=0||ln.indexOf(q)>=0||(c.phone||'').indexOf(q)>=0;
+  }).slice(0,8);
+  if(!matches.length){res.innerHTML='<div style="padding:8px 10px;color:var(--muted);font-style:italic">No customers found</div>';res.style.display='block';return;}
+  res.innerHTML='';
+  matches.forEach(function(c){
+    var div=document.createElement('div');
+    div.style.cssText='padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--off)';
+    div.innerHTML='<strong>'+c.first+' '+c.last+'</strong>'+(c.phone?' <span style="color:var(--muted);font-size:12px">'+c.phone+'</span>':'');
+    div.onmouseover=function(){this.style.background='var(--off)';};
+    div.onmouseout=function(){this.style.background='';};
+    div.onclick=function(){rsvCustSelect(c.id);};
+    res.appendChild(div);
+  });
+  res.style.display='block';
+}
+function rsvCustSelect(cid){
+  var c=CUSTS[cid];if(!c)return;
+  document.getElementById('rsv-cust').value=cid;
+  document.getElementById('rsv-cust-search').value='';
+  document.getElementById('rsv-cust-results').style.display='none';
+  document.getElementById('rsv-cust-selected-label').textContent=c.first+' '+c.last+(c.phone?' — '+c.phone:'');
+  document.getElementById('rsv-cust-selected').style.display='flex';
+}
+function rsvCustClear(){
+  document.getElementById('rsv-cust').value='';
+  document.getElementById('rsv-cust-search').value='';
+  document.getElementById('rsv-cust-results').style.display='none';
+  document.getElementById('rsv-cust-selected').style.display='none';
+  document.getElementById('rsv-cust-selected-label').textContent='';
+}
+var _rsvUnitId=null,_rsvPending=null;
+function openReserveUnit(unitId){
+  var u=RENTAL_UNITS[unitId];if(!u)return;
+  _rsvUnitId=unitId;_rsvPending=null;
+  document.getElementById('rsv-mtitle').textContent='Reserve '+(u.sku?u.sku+' — ':'')+[(u.brand||''),(u.type||'')].filter(Boolean).join(' ');
+  rsvCustClear();
+  document.getElementById('rsv-start').value='';document.getElementById('rsv-end').value='';document.getElementById('rsv-notes').value='';
+  document.getElementById('rsv-warning').style.display='none';
+  document.getElementById('rsv-mfoot-default').style.display='flex';
+  document.getElementById('rsv-mfoot-conflict').style.display='none';
+  document.getElementById('rsv-modal').classList.add('open');
+}
+function attemptReservation(){
+  var custId=document.getElementById('rsv-cust').value;
+  var start=document.getElementById('rsv-start').value,end=document.getElementById('rsv-end').value;
+  if(!custId){alert('Please select a customer.');return;}
+  if(!start||!end){alert('Please set both a pickup and return date.');return;}
+  if(end<start){alert('Return date is before the pickup date.');return;}
+  var conflict=findConflict(_rsvUnitId,start,end);
+  if(!conflict){
+    saveReservation(_rsvUnitId,custId,start,end,document.getElementById('rsv-notes').value.trim());
+    closeM('rsv-modal');
+    return;
+  }
+  var cc=CUSTS[conflict.custId]||{};
+  document.getElementById('rsv-warning').style.display='block';
+  document.getElementById('rsv-warning').innerHTML='<strong>&#9888; Already booked '+conflict.start+' to '+conflict.end+'</strong> for '+((cc.first||'')+' '+(cc.last||'')).trim()+'. You can add this customer to the waitlist, or reserve anyway if you know it\'ll work out.';
+  document.getElementById('rsv-mfoot-default').style.display='none';
+  document.getElementById('rsv-mfoot-conflict').style.display='flex';
+  _rsvPending={custId:custId,start:start,end:end,notes:document.getElementById('rsv-notes').value.trim()};
+}
+function confirmReserveAnyway(){
+  if(!_rsvPending)return;
+  saveReservation(_rsvUnitId,_rsvPending.custId,_rsvPending.start,_rsvPending.end,_rsvPending.notes);
+  closeM('rsv-modal');
+}
+function confirmWaitlist(){
+  if(!_rsvPending)return;
+  var w={id:genId(),unitId:_rsvUnitId,custId:_rsvPending.custId,desiredStart:_rsvPending.start,desiredEnd:_rsvPending.end,notes:_rsvPending.notes,addedAt:Date.now()};
+  writeWaitlistEntry(w);
+  closeM('rsv-modal');
+  alert('Added to the waitlist for this unit.');
+}
+function saveReservation(unitId,custId,start,end,notes){
+  var b={id:genId(),unitId:unitId,custId:custId,start:start,end:end,notes:notes,createdAt:Date.now()};
+  writeRentalBooking(b);
+}
 var _rentalCalUnit=null,_rentalCalYear=null,_rentalCalMonth=null;
 function openRentalCalendar(unitId){
   var u=RENTAL_UNITS[unitId];if(!u)return;
@@ -1867,6 +2007,25 @@ function renderRentalCalendar(){
     +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">'+dowHtml+'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">'+cells+'</div>'
     +'<div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:var(--muted)"><span><span style="display:inline-block;width:10px;height:10px;background:#eaf3de;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Available</span><span><span style="display:inline-block;width:10px;height:10px;background:#FCEBEB;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Reserved</span></div>';
+  renderRentalCalList();
+}
+function renderRentalCalList(){
+  var el=document.getElementById('rental-cal-list');if(!el)return;
+  var bookings=getBookingsForUnit(_rentalCalUnit),waitlist=getWaitlistForUnit(_rentalCalUnit);
+  var html='';
+  if(bookings.length){
+    html+='<div class="sect-lbl">Reservations</div>'+bookings.map(function(b){
+      var c=CUSTS[b.custId]||{};
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+((c.first||'')+' '+(c.last||'')).trim()+'</strong> &middot; '+b.start+' &rarr; '+b.end+(b.notes?' &middot; '+b.notes:'')+'</div><button class="btn sm del" style="flex-shrink:0;padding:2px 7px" onclick="cancelReservation(\''+b.id+'\')">&#x2715;</button></div>';
+    }).join('');
+  }
+  if(waitlist.length){
+    html+='<div class="sect-lbl" style="margin-top:10px">Waitlist</div>'+waitlist.map(function(w){
+      var c=CUSTS[w.custId]||{};
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+((c.first||'')+' '+(c.last||'')).trim()+'</strong> &middot; wants '+w.desiredStart+' &rarr; '+w.desiredEnd+(w.notes?' &middot; '+w.notes:'')+'</div><button class="btn sm del" style="flex-shrink:0;padding:2px 7px" onclick="removeFromWaitlist(\''+w.id+'\')">&#x2715;</button></div>';
+    }).join('');
+  }
+  el.innerHTML=html;
 }
 function downloadRentalInvoice(unitId){
   var u=RENTAL_UNITS[unitId];if(!u)return;
