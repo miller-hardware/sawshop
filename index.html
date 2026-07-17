@@ -496,6 +496,11 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <div id="weekly-snapshot" style="margin-top:8px"></div>
       </div>
       <div class="card">
+        <div class="card-hdr">&#128295; Log Equipment from Work Order History</div>
+        <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Every <em>new</em> work order now automatically logs its equipment on the customer's record, same as &ldquo;Log Equipment / New Unit Sale&rdquo; &mdash; deduped so repeat visits for the same unit don't pile up. This is the one-time catch-up pass for your <em>existing</em> work order history. Shows exactly what would be created before anything is saved.</div>
+        <div id="equip-backfill-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
+      </div>
+      <div class="card">
         <div class="card-hdr">&#128203; Customer Name / Phone Cleanup</div>
         <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Standardizes name capitalization and phone format (xxx-xxx-xxxx) across your existing customer list. New entries are already cleaned up automatically &mdash; this is a one-time pass over what's already on file. Shows exactly what would change before anything is saved.</div>
         <div id="cust-cleanup-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
@@ -1051,7 +1056,7 @@ function applyRole(){
   document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
   var au=document.getElementById('admin-unlocked');
   if(au)au.style.display=admin?'block':'none';
-  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();}
+  if(admin){renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}
   var rl=document.getElementById('account-role');
   if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
 }
@@ -1176,6 +1181,62 @@ function weeklySnapshotHTML(forPrint){
 }
 function renderWeeklySnapshot(){var el=document.getElementById('weekly-snapshot');if(el)el.innerHTML=weeklySnapshotHTML(false);}
 function printWeeklySnapshot(){var pa=document.getElementById('print-area');pa.innerHTML=weeklySnapshotHTML(true);pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
+// ── One-time catch-up: log equipment from existing work order history (owner-only, preview-then-apply) ──
+function computeEquipmentBackfillPreview(){
+  var results=[],byCust={};
+  Object.values(ORDERS).forEach(function(o){
+    if(!o.custId)return;
+    if(!o.equipType&&!o.brand&&!o.serial)return;
+    (byCust[o.custId]=byCust[o.custId]||[]).push(o);
+  });
+  Object.keys(byCust).forEach(function(cid){
+    var orders=byCust[cid].slice().sort(function(a,b){return (a.dateIn||'').localeCompare(b.dateIn||'');});
+    var existingKeys={};(EQUIPMENT[cid]||[]).forEach(function(e){existingKeys[equipMatchKey(e)]=true;});
+    var seenInBatch={};
+    orders.forEach(function(o){
+      var rec={type:o.equipType||'',brand:o.brand||'',year:o.year||'',product:o.product||'',model:o.model||'',serial:o.serial||'',engine:o.engine||''};
+      var key=equipMatchKey(rec);
+      if(existingKeys[key]||seenInBatch[key])return;
+      seenInBatch[key]=true;
+      var c=CUSTS[cid]||{};
+      results.push({custId:cid,custName:((c.first||'')+' '+(c.last||'')).trim(),eq:Object.assign({date:o.dateIn||'',rectype:'sale',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:''},rec),sourceWoNum:o.woNum});
+    });
+  });
+  return results;
+}
+function renderEquipmentBackfill(){
+  var el=document.getElementById('equip-backfill-box');if(!el)return;
+  var results=computeEquipmentBackfillPreview();
+  if(!results.length){el.innerHTML='<div style="font-size:13px;color:var(--muted);font-style:italic">Nothing to catch up &mdash; every unit from work order history is already logged.</div>';return;}
+  var custSet={};results.forEach(function(r){custSet[r.custId]=1;});
+  var custCount=Object.keys(custSet).length;
+  var shown=results.slice(0,60);
+  var rows=shown.map(function(r){
+    var e=r.eq,desc=[e.brand,e.type].filter(Boolean).join(' ')||'Equipment';
+    var detail=[e.model?'Model '+e.model:'',e.serial?'SN '+e.serial:''].filter(Boolean).join(' &middot; ');
+    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)"><strong>'+r.custName+'</strong> &mdash; '+desc+(detail?' ('+detail+')':'')+' <span style="color:var(--muted)">from WO #'+r.sourceWoNum+'</span></div>';
+  }).join('');
+  var more=results.length>shown.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">&hellip;and '+(results.length-shown.length)+' more.</div>':'';
+  el.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--dark)">'+results.length+' equipment record'+(results.length!==1?'s':'')+' would be created across '+custCount+' customer'+(custCount!==1?'s':'')+':</div>'
+    +'<div style="max-height:260px;overflow-y:auto">'+rows+'</div>'+more
+    +'<button class="btn primary" style="margin-top:10px;width:100%;justify-content:center" onclick="applyEquipmentBackfill()">Create These '+results.length+' Equipment Record'+(results.length!==1?'s':'')+'</button>';
+}
+function applyEquipmentBackfill(){
+  if(!isAdmin()){alert('Only the shop owner can run this.');return;}
+  var results=computeEquipmentBackfillPreview();
+  if(!results.length)return;
+  var custSet={};results.forEach(function(r){custSet[r.custId]=1;});
+  var custCount=Object.keys(custSet).length;
+  if(!confirm('Create '+results.length+' equipment record'+(results.length!==1?'s':'')+' across '+custCount+' customer'+(custCount!==1?'s':'')+', based on work order history?\n\nEach logs as "Sold by Miller Hardware" (same as New Unit Sale) — you can edit any record afterward.\n\nThis cannot be undone.'))return;
+  var byCust={};
+  results.forEach(function(r){(byCust[r.custId]=byCust[r.custId]||[]).push(r.eq);});
+  var updates={};
+  Object.keys(byCust).forEach(function(cid){updates['equipment/'+cid]=(EQUIPMENT[cid]||[]).concat(byCust[cid]);});
+  DB.ref().update(updates).then(function(){
+    alert('Created '+results.length+' equipment record'+(results.length!==1?'s':'')+'.');
+    renderEquipmentBackfill();
+  }).catch(function(e){alert('Update failed: '+e.message);});
+}
 // ── One-time cleanup pass: fix known brand-name misspellings/casing on orders + equipment (owner-only, preview-then-apply) ──
 var BRAND_FIXES={
   'stihl':'Stihl','sthil':'Stihl','sthl':'Stihl','shihl':'Stihl','sithl':'Stihl','sthihl':'Stihl','stihlk':'Stihl','stihol':'Stihl','sthill':'Stihl','stilh':'Stihl',
@@ -1361,7 +1422,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
-  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();}}
+  if(t==='settings'){renderInstallBox();if(isAdmin()){renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}}
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1558,7 +1619,23 @@ function saveWO(){
   var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
   var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
   var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,intakeBy:prev.intakeBy||myDisplayName(),tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
-  writeOrder(o);closeM('wo-modal');
+  writeOrder(o);syncEquipmentFromOrder(o);closeM('wo-modal');
+}
+// ── Every work order automatically logs its equipment on the customer's record (same shape as "Log Equipment / New Unit Sale"), deduped so repeat visits for the same unit don't pile up. ──
+function equipMatchKey(e){
+  var serial=(e.serial||'').trim().toLowerCase();
+  if(serial)return 'sn:'+serial;
+  return 'tb:'+(e.type||'').trim().toLowerCase()+'|'+(e.brand||'').trim().toLowerCase()+'|'+(e.model||'').trim().toLowerCase();
+}
+function syncEquipmentFromOrder(o){
+  if(!o.custId)return;
+  if(!o.equipType&&!o.brand&&!o.serial)return;                 // nothing identifiable to log
+  var rec={type:o.equipType||'',brand:o.brand||'',year:o.year||'',product:o.product||'',model:o.model||'',serial:o.serial||'',engine:o.engine||''};
+  var key=equipMatchKey(rec);
+  var existing=EQUIPMENT[o.custId]||[];
+  if(existing.some(function(e){return equipMatchKey(e)===key;}))return;   // already on file — don't duplicate or overwrite
+  var eq=Object.assign({date:o.dateIn||today(),rectype:'sale',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:''},rec);
+  writeEquipment(o.custId,existing.concat([eq]));
 }
 function delWO(){if(!editWOid)return;var id=editWOid;requireAdminDelete('Delete work order #'+(ORDERS[id]?ORDERS[id].woNum:'')+' — this cannot be undone.',function(){deleteOrder(id);closeM('wo-modal');});}
 
