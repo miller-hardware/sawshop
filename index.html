@@ -789,6 +789,26 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 </div>
 </div>
 
+<!-- RENTAL CHECKOUT / CHECK-IN MODAL -->
+<div class="modal-bg" id="rental-inspect-modal" style="z-index:280">
+<div class="modal">
+  <div class="modal-title" id="rental-inspect-title">Check Out</div>
+  <div id="rental-inspect-sub" style="font-size:13px;color:var(--gray2);margin-bottom:10px"></div>
+  <div class="sect-lbl" style="margin-top:0">Inspection Checklist</div>
+  <div id="rental-inspect-checklist"></div>
+  <div class="f"><label>Condition Notes</label><textarea id="rental-inspect-notes" placeholder="Note any damage, missing accessories, low fuel, etc."></textarea></div>
+  <div class="sect-lbl">Signature</div>
+  <div id="rental-inspect-statement" style="font-size:12px;color:var(--gray2);margin-bottom:8px"></div>
+  <canvas id="rental-sig-canvas" width="600" height="180" style="width:100%;height:auto;touch-action:none;border:1.5px dashed var(--silver);border-radius:4px;background:#fff;display:block;cursor:crosshair"></canvas>
+  <div style="font-size:11px;color:var(--muted);margin-top:5px">Sign with your finger or mouse in the box above.</div>
+  <div class="mfoot">
+    <button class="btn" onclick="closeM('rental-inspect-modal')">Cancel</button>
+    <button class="btn" onclick="clearRentalSig()">Clear Signature</button>
+    <button class="btn primary" onclick="saveRentalInspection()">Save</button>
+  </div>
+</div>
+</div>
+
 <!-- RESERVE UNIT MODAL -->
 <div class="modal-bg" id="rsv-modal" style="z-index:270">
 <div class="modal">
@@ -2009,14 +2029,87 @@ function renderRentalCalendar(){
     +'<div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:var(--muted)"><span><span style="display:inline-block;width:10px;height:10px;background:#eaf3de;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Available</span><span><span style="display:inline-block;width:10px;height:10px;background:#FCEBEB;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Reserved</span></div>';
   renderRentalCalList();
 }
+// ── Rental checkout / check-in — inspection checklist + signature (Phase 3) ──────────────────
+// Starter checklists based on general rental-industry best practice — grouped by equipment class, not every individual type.
+// Placeholder until Mike's rental training; easy to adjust items later, just ask.
+var RENTAL_CLASS_MAP={
+  'Tiller / Cultivator':'small_engine','Aerator':'small_engine','Dethatcher':'small_engine','Log Splitter':'small_engine','Chainsaw':'small_engine','Post Hole Digger / Auger':'small_engine','Water Pump':'small_engine',
+  'Pressure Washer':'pressure_electric','Air Compressor':'pressure_electric','Floor Sander':'pressure_electric','Carpet Cleaner':'pressure_electric','Tile Saw':'pressure_electric',
+  'Generator':'heavy_equipment','Trencher':'heavy_equipment','Concrete Mixer':'heavy_equipment','Stump Grinder':'heavy_equipment','Wood Chipper':'heavy_equipment','Skid Steer / Mini Excavator':'heavy_equipment',
+  'Utility Trailer':'towable','Scaffolding':'towable'
+};
+var RENTAL_CHECKLISTS={
+  small_engine:['Fuel level noted','Oil level checked, no leaks visible','Air filter clean and seated','Starts and runs smoothly, idles properly','All safety guards/shields in place and secure','Blade/tines/chain sharp and properly attached (if applicable)','Throttle and controls move freely','No visible cracks, dents, or damage','All included attachments/accessories present','Unit is reasonably clean'],
+  pressure_electric:['Power cord/hose intact, no cuts or fraying','Plug and switch in good working condition','Starts/powers on and runs smoothly','No leaks from seals or fittings','Blade, pad, or brush attachment in good condition','All safety guards in place','No visible cracks or housing damage','All included attachments/accessories present','Unit is reasonably clean'],
+  heavy_equipment:['Fuel, oil, and hydraulic fluid levels checked','Starts and runs smoothly, no unusual noise','Hour meter reading recorded','All safety guards/shields in place and secure','Blades/teeth/drum in good condition, properly secured','Tracks/tires in good condition, properly inflated','Full range of motion tested, no binding','No visible structural damage or leaks','Warning labels/decals legible','Unit is reasonably clean'],
+  towable:['Tires in good condition, properly inflated','Lights (brake/turn/running) functioning','Hitch/coupler and safety chains secure','Deck/platform/ramp free of damage','Straps/tie-downs/locking pins present and functional','No visible structural damage or rust-through','Unit is reasonably clean'],
+  general:['No visible damage','Starts/operates properly (if powered)','All safety features/guards in place','All included attachments/accessories present','Unit is reasonably clean']
+};
+function getChecklistForType(type){return RENTAL_CHECKLISTS[RENTAL_CLASS_MAP[type]||'general']||RENTAL_CHECKLISTS.general;}
+var _rinspBookingId=null,_rinspKind=null,_rsigCtx=null,_rsigDrawing=false,_rsigHasInk=false,_rsigInited=false;
+function openRentalInspect(bookingId,kind){
+  var b=RENTAL_BOOKINGS[bookingId];if(!b)return;
+  var u=RENTAL_UNITS[b.unitId]||{},c=CUSTS[b.custId]||{};
+  _rinspBookingId=bookingId;_rinspKind=kind;_rsigHasInk=false;
+  document.getElementById('rental-inspect-title').textContent=(kind==='checkout'?'Check Out — ':'Check In — ')+(u.sku||'')+' '+[(u.brand||''),(u.type||'')].filter(Boolean).join(' ');
+  document.getElementById('rental-inspect-sub').textContent=((c.first||'')+' '+(c.last||'')).trim()+' &middot; '+b.start+' &rarr; '+b.end;
+  var items=getChecklistForType(u.type);
+  document.getElementById('rental-inspect-checklist').innerHTML=items.map(function(item,i){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rinsp-item-'+i+'" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0"> '+item+'</label>';
+  }).join('');
+  document.getElementById('rental-inspect-notes').value='';
+  document.getElementById('rental-inspect-statement').textContent=kind==='checkout'
+    ?'I have reviewed the equipment condition above with Miller Hardware staff and accept the unit in this condition.'
+    :'I confirm the equipment condition was reviewed together at return.';
+  var canvas=document.getElementById('rental-sig-canvas');
+  _rsigCtx=canvas.getContext('2d');
+  _rsigCtx.clearRect(0,0,canvas.width,canvas.height);
+  _rsigCtx.lineWidth=2.5;_rsigCtx.lineCap='round';_rsigCtx.lineJoin='round';_rsigCtx.strokeStyle='#1a1a1a';
+  if(!_rsigInited){initRentalSigPad();_rsigInited=true;}
+  document.getElementById('rental-inspect-modal').classList.add('open');
+}
+function initRentalSigPad(){
+  var canvas=document.getElementById('rental-sig-canvas');
+  function xy(e){var r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*(canvas.width/r.width),y:(e.clientY-r.top)*(canvas.height/r.height)};}
+  canvas.addEventListener('pointerdown',function(e){_rsigDrawing=true;_rsigHasInk=true;var p=xy(e);_rsigCtx.beginPath();_rsigCtx.moveTo(p.x,p.y);try{canvas.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();});
+  canvas.addEventListener('pointermove',function(e){if(!_rsigDrawing)return;var p=xy(e);_rsigCtx.lineTo(p.x,p.y);_rsigCtx.stroke();e.preventDefault();});
+  canvas.addEventListener('pointerup',function(){_rsigDrawing=false;});
+  canvas.addEventListener('pointercancel',function(){_rsigDrawing=false;});
+}
+function clearRentalSig(){var canvas=document.getElementById('rental-sig-canvas');if(_rsigCtx)_rsigCtx.clearRect(0,0,canvas.width,canvas.height);_rsigHasInk=false;}
+function saveRentalInspection(){
+  if(!_rsigHasInk){alert('Please sign in the box first.');return;}
+  var b=RENTAL_BOOKINGS[_rinspBookingId];if(!b)return;
+  var u=RENTAL_UNITS[b.unitId]||{};
+  var items=getChecklistForType(u.type);
+  var checklist=items.map(function(item,i){return document.getElementById('rinsp-item-'+i).checked;});
+  var stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  var data=document.getElementById('rental-sig-canvas').toDataURL('image/png');
+  var prefix=_rinspKind==='checkout'?'checkout':'return';
+  var updates={};
+  updates[prefix+'Checklist']=checklist;
+  updates[prefix+'Notes']=document.getElementById('rental-inspect-notes').value.trim();
+  updates[prefix+'Sig']={data:data,ts:stamp};
+  updates[prefix+'At']=Date.now();
+  updates.status=_rinspKind==='checkout'?'checked_out':'returned';
+  if(DB){DB.ref('rental_bookings/'+_rinspBookingId).update(updates);}
+  else{Object.assign(RENTAL_BOOKINGS[_rinspBookingId],updates);renderRentalCalendar();}
+  var newUnitStatus=_rinspKind==='checkout'?'Out':'Available';
+  if(DB){DB.ref('rental_units/'+b.unitId+'/status').set(newUnitStatus);}
+  else{RENTAL_UNITS[b.unitId].status=newUnitStatus;renderRentalFleet();}
+  closeM('rental-inspect-modal');
+}
 function renderRentalCalList(){
   var el=document.getElementById('rental-cal-list');if(!el)return;
   var bookings=getBookingsForUnit(_rentalCalUnit),waitlist=getWaitlistForUnit(_rentalCalUnit);
   var html='';
   if(bookings.length){
     html+='<div class="sect-lbl">Reservations</div>'+bookings.map(function(b){
-      var c=CUSTS[b.custId]||{};
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+((c.first||'')+' '+(c.last||'')).trim()+'</strong> &middot; '+b.start+' &rarr; '+b.end+(b.notes?' &middot; '+b.notes:'')+'</div><button class="btn sm del" style="flex-shrink:0;padding:2px 7px" onclick="cancelReservation(\''+b.id+'\')">&#x2715;</button></div>';
+      var c=CUSTS[b.custId]||{},status=b.status||'reserved';
+      var actionBtn=status==='reserved'?'<button class="btn sm primary" style="flex-shrink:0" onclick="openRentalInspect(\''+b.id+'\',\'checkout\')">Check Out</button>'
+        :status==='checked_out'?'<button class="btn sm primary" style="flex-shrink:0" onclick="openRentalInspect(\''+b.id+'\',\'checkin\')">Check In</button>'
+        :'<span class="badge b-ready" style="flex-shrink:0">Returned</span>';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+((c.first||'')+' '+(c.last||'')).trim()+'</strong> &middot; '+b.start+' &rarr; '+b.end+(b.notes?' &middot; '+b.notes:'')+'</div><div style="display:flex;gap:5px;flex-shrink:0">'+actionBtn+(status==='reserved'?'<button class="btn sm del" style="padding:2px 7px" onclick="cancelReservation(\''+b.id+'\')">&#x2715;</button>':'')+'</div></div>';
     }).join('');
   }
   if(waitlist.length){
