@@ -317,6 +317,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="tab" onclick="showTab('reminders')">Reminders <span class="tab-badge" id="reminder-badge" style="display:none">0</span></div>
       <div class="tab" onclick="showTab('parts')">🔧 Parts to Order</div>
       <div class="tab" onclick="showTab('orders')">Work Order Archive</div>
+      <div class="tab" onclick="showTab('rental')">&#128666; Rental</div>
       <div class="tab" onclick="showTab('settings')">Settings</div>
     </div>
     <button class="btn primary" onclick="openNewWO()">+ New Work Order</button>
@@ -368,6 +369,18 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div id="wo-list"><div class="empty">Loading...</div></div>
   </div>
 
+  <div class="view" id="tab-rental">
+    <div class="srow">
+      <select id="rental-loc-f" onchange="renderRentalFleet()" style="min-width:160px">
+        <option value="">All Locations</option>
+        <option value="Yellville">Yellville</option>
+        <option value="Harrison">Harrison</option>
+      </select>
+      <input type="text" id="rental-q" placeholder="Search SKU, type, brand, model, serial..." oninput="renderRentalFleet()">
+      <button class="btn primary" onclick="openNewRentalUnit()">+ Add Rental Unit</button>
+    </div>
+    <div id="rental-fleet-list" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-top:12px"></div>
+  </div>
 
   <div class="view" id="tab-reminders">
     <div id="reminder-season-banner"></div>
@@ -723,6 +736,58 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 </div>
 </div>
 
+<!-- RENTAL UNIT MODAL -->
+<div class="modal-bg" id="rental-unit-modal">
+<div class="modal">
+  <div class="modal-title" id="rental-unit-mtitle">Add Rental Unit</div>
+  <div class="g3">
+    <div class="f"><label>SKU / Asset Tag</label><input type="text" id="ru-sku" placeholder="e.g. RENT-014"></div>
+    <div class="f"><label>Equipment Type</label>
+      <select id="ru-type">
+        <option>Tiller / Cultivator</option><option>Aerator</option><option>Dethatcher</option>
+        <option>Log Splitter</option><option>Pressure Washer</option><option>Generator</option>
+        <option>Air Compressor</option><option>Chainsaw</option><option>Post Hole Digger / Auger</option>
+        <option>Trencher</option><option>Concrete Mixer</option><option>Floor Sander</option>
+        <option>Carpet Cleaner</option><option>Tile Saw</option><option>Stump Grinder</option>
+        <option>Wood Chipper</option><option>Water Pump</option><option>Utility Trailer</option>
+        <option>Skid Steer / Mini Excavator</option><option>Scaffolding</option><option>Other</option>
+      </select>
+    </div>
+    <div class="f"><label>Status</label>
+      <select id="ru-status">
+        <option>Available</option><option>Out</option><option>Down</option><option>Retired</option>
+      </select>
+    </div>
+  </div>
+  <div class="g3">
+    <div class="f"><label>Brand</label><input type="text" id="ru-brand" placeholder="e.g. Honda"></div>
+    <div class="f"><label>Model</label><input type="text" id="ru-model"></div>
+    <div class="f"><label>Serial Number</label><input type="text" id="ru-serial"></div>
+  </div>
+  <div class="g2">
+    <div class="f"><label>Vendor (for reordering)</label><input type="text" id="ru-vendor" placeholder="Who you'd buy a replacement from"></div>
+    <div class="f"><label>Location</label>
+      <select id="ru-location"><option>Yellville</option><option>Harrison</option></select>
+    </div>
+  </div>
+  <div class="f"><label>Notes</label><textarea id="ru-notes" placeholder="Accessories, known condition, etc."></textarea></div>
+  <div class="mfoot">
+    <button class="btn" onclick="closeM('rental-unit-modal')">Cancel</button>
+    <button class="btn del sm" id="ru-del-btn" onclick="delRentalUnit()" style="display:none">Remove</button>
+    <button class="btn primary" onclick="saveRentalUnit()">Save Unit</button>
+  </div>
+</div>
+</div>
+
+<!-- RENTAL CALENDAR MODAL -->
+<div class="modal-bg" id="rental-cal-modal" style="z-index:260">
+<div class="modal" style="max-width:400px">
+  <div class="modal-title" id="rental-cal-title">Calendar</div>
+  <div id="rental-cal-body"></div>
+  <div class="mfoot"><button class="btn" onclick="closeM('rental-cal-modal')">Close</button></div>
+</div>
+</div>
+
 <!-- CONTACT LOG MODAL -->
 <div class="modal-bg" id="contact-modal">
 <div class="modal">
@@ -793,7 +858,7 @@ var FB_BAKED = {
   messagingSenderId: "187757043776",
   appId: "1:187757043776:web:a0cce22b59172da8db7fa5"
 };
-var DB=null,STORAGE=null,ORDERS={},CUSTS={},TECHS=['Michael','Tech 2','Tech 3'],VENDORS=[],EQUIPMENT={},ATTACHMENTS={},CONTACTLOGS={},PARTORDERS={stihl:[],other:[]};
+var DB=null,STORAGE=null,ORDERS={},CUSTS={},TECHS=['Michael','Tech 2','Tech 3'],VENDORS=[],EQUIPMENT={},ATTACHMENTS={},CONTACTLOGS={},PARTORDERS={stihl:[],other:[]},RENTAL_UNITS={};
 var editWOid=null,editCid=null,editEqCid=null,editEqIdx=null,contactLogWOid=null,nextWO=1001;
 var activeRFilter='all';
 var SVC_INTERVALS={chainsaw:12,mower:12,generator:24,trimmer:18,other:18};
@@ -1030,6 +1095,7 @@ function startDataSync(){
   DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();if(isAdmin())DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
   DB.ref('svcIntervals').on('value',function(s){var v=s.val();if(v){SVC_INTERVALS=Object.assign(SVC_INTERVALS,v);loadIntervalInputs();renderReminders();}});
   DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderBoard();});
+  DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
 }
 var AUTH=null,CURRENT_USER=null;
 function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
@@ -1418,7 +1484,7 @@ function custEquip(cid){return EQUIPMENT[cid]||[];}
 function refreshAll(){renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
 
 function showTab(t){
-  var tabs=['board','customers','daily','reminders','parts','orders','settings'];
+  var tabs=['board','customers','daily','reminders','parts','orders','rental','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
@@ -1691,6 +1757,151 @@ function openAddEquip(cid,idx){
 }
 document.getElementById('eq-warranty-len').addEventListener('change',function(){var v=this.value,d=document.getElementById('eq-date').value||today();if(v&&v!=='custom'&&v!==''){var exp=new Date(d);exp.setDate(exp.getDate()+parseInt(v));document.getElementById('eq-warranty-exp').value=exp.toISOString().slice(0,10);}else if(v==='custom')document.getElementById('eq-warranty-exp').value='';});
 function saveEquip(){var eq={type:document.getElementById('eq-type').value,brand:document.getElementById('eq-brand').value,year:document.getElementById('eq-year').value,product:document.getElementById('eq-product').value,model:document.getElementById('eq-model').value,serial:document.getElementById('eq-serial').value,engine:document.getElementById('eq-engine').value,date:document.getElementById('eq-date').value,rectype:document.getElementById('eq-rectype').value,warrantyLen:document.getElementById('eq-warranty-len').value,warrantyExp:document.getElementById('eq-warranty-exp').value,warrantyNotes:document.getElementById('eq-warranty-notes').value,notes:document.getElementById('eq-notes').value};var arr=custEquip(editEqCid).slice();if(editEqIdx!==null){arr[editEqIdx]=eq;}else{arr.push(eq);}writeEquipment(editEqCid,arr);closeM('eq-modal');openCustDet(editEqCid);}
+
+// ── Rental fleet (Phase 1: inventory + per-unit calendar; reservations/bookings come in Phase 2) ──
+function writeRentalUnit(u){if(DB){DB.ref('rental_units/'+u.id).set(u);}else{RENTAL_UNITS[u.id]=u;renderRentalFleet();}}
+function deleteRentalUnit(id){if(DB){DB.ref('rental_units/'+id).remove();}else{delete RENTAL_UNITS[id];renderRentalFleet();}}
+function renderRentalFleet(){
+  var el=document.getElementById('rental-fleet-list');if(!el)return;
+  var locF=(document.getElementById('rental-loc-f')||{}).value||'';
+  var q=((document.getElementById('rental-q')||{}).value||'').toLowerCase();
+  var list=Object.values(RENTAL_UNITS).filter(function(u){
+    if(locF&&u.location!==locF)return false;
+    if(q){var txt=((u.sku||'')+' '+(u.type||'')+' '+(u.brand||'')+' '+(u.model||'')+' '+(u.serial||'')).toLowerCase();if(txt.indexOf(q)<0)return false;}
+    return true;
+  }).sort(function(a,b){return (a.sku||'').localeCompare(b.sku||'');});
+  if(!list.length){el.innerHTML='<div class="empty" style="grid-column:1/-1">No rental units yet — tap + Add Rental Unit to start building your fleet.</div>';return;}
+  var statusCls={Available:'b-ready',Out:'b-waiting',Down:'b-urgent',Retired:'b-complete'};
+  el.innerHTML=list.map(function(u){
+    return '<div class="card" style="margin-bottom:0">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div style="min-width:0"><div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em">SKU '+(u.sku||'&mdash;')+'</div>'
+      +'<div style="font-size:16px;font-weight:800">'+[(u.brand||''),(u.type||'')].filter(Boolean).join(' ')+'</div>'
+      +'<div style="font-size:12px;color:var(--gray2)">'+[u.model?'Model '+u.model:'',u.serial?'SN '+u.serial:''].filter(Boolean).join(' &middot; ')+'</div></div>'
+      +'<span class="badge '+(statusCls[u.status]||'b-intake')+'" style="flex-shrink:0">'+(u.status||'Available')+'</span>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:6px">'+(u.location||'')+(u.vendor?' &middot; Vendor: '+u.vendor:'')+'</div>'
+      +(u.notes?'<div style="font-size:12px;color:var(--gray2);font-style:italic;margin-top:5px">'+u.notes+'</div>':'')
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+      +'<button class="btn sm" onclick="openEditRentalUnit(\''+u.id+'\')">Edit</button>'
+      +'<button class="btn sm" onclick="openRentalCalendar(\''+u.id+'\')">&#128197; Calendar</button>'
+      +'<button class="btn sm" onclick="downloadRentalInvoice(\''+u.id+'\')">&#11015; Invoice</button>'
+      +'</div></div>';
+  }).join('');
+}
+var editRUid=null;
+function openNewRentalUnit(){
+  editRUid=null;
+  document.getElementById('rental-unit-mtitle').textContent='Add Rental Unit';
+  document.getElementById('ru-del-btn').style.display='none';
+  ['ru-sku','ru-brand','ru-model','ru-serial','ru-vendor','ru-notes'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('ru-type').value='Tiller / Cultivator';
+  document.getElementById('ru-status').value='Available';
+  document.getElementById('ru-location').value=defaultLocation();
+  document.getElementById('rental-unit-modal').classList.add('open');
+}
+function openEditRentalUnit(id){
+  var u=RENTAL_UNITS[id];if(!u)return;
+  editRUid=id;
+  document.getElementById('rental-unit-mtitle').textContent='Edit Rental Unit';
+  document.getElementById('ru-del-btn').style.display='';
+  document.getElementById('ru-sku').value=u.sku||'';
+  document.getElementById('ru-type').value=u.type||'Tiller / Cultivator';
+  document.getElementById('ru-status').value=u.status||'Available';
+  document.getElementById('ru-brand').value=u.brand||'';
+  document.getElementById('ru-model').value=u.model||'';
+  document.getElementById('ru-serial').value=u.serial||'';
+  document.getElementById('ru-vendor').value=u.vendor||'';
+  document.getElementById('ru-location').value=u.location||'Yellville';
+  document.getElementById('ru-notes').value=u.notes||'';
+  document.getElementById('rental-unit-modal').classList.add('open');
+}
+function saveRentalUnit(){
+  var sku=document.getElementById('ru-sku').value.trim();
+  if(!sku){alert('Please enter a SKU / asset tag.');return;}
+  var u={id:editRUid||genId(),sku:sku,type:document.getElementById('ru-type').value,status:document.getElementById('ru-status').value,brand:document.getElementById('ru-brand').value.trim(),model:document.getElementById('ru-model').value.trim(),serial:document.getElementById('ru-serial').value.trim(),vendor:document.getElementById('ru-vendor').value.trim(),location:document.getElementById('ru-location').value,notes:document.getElementById('ru-notes').value.trim()};
+  writeRentalUnit(u);
+  closeM('rental-unit-modal');
+}
+function delRentalUnit(){
+  if(!editRUid)return;
+  var id=editRUid,sku=(RENTAL_UNITS[id]||{}).sku||'';
+  requireAdminDelete('Remove rental unit "'+sku+'"? This cannot be undone.',function(){deleteRentalUnit(id);closeM('rental-unit-modal');});
+}
+// Phase 2 will populate this from real reservation records — every day shows Available until then.
+function getBookingsForUnit(unitId){return [];}
+var _rentalCalUnit=null,_rentalCalYear=null,_rentalCalMonth=null;
+function openRentalCalendar(unitId){
+  var u=RENTAL_UNITS[unitId];if(!u)return;
+  _rentalCalUnit=unitId;
+  var now=new Date();_rentalCalYear=now.getFullYear();_rentalCalMonth=now.getMonth();
+  document.getElementById('rental-cal-title').textContent=(u.sku?u.sku+' — ':'')+[(u.brand||''),(u.type||'')].filter(Boolean).join(' ');
+  renderRentalCalendar();
+  document.getElementById('rental-cal-modal').classList.add('open');
+}
+function shiftRentalCalMonth(delta){
+  _rentalCalMonth+=delta;
+  if(_rentalCalMonth<0){_rentalCalMonth=11;_rentalCalYear--;}
+  if(_rentalCalMonth>11){_rentalCalMonth=0;_rentalCalYear++;}
+  renderRentalCalendar();
+}
+function renderRentalCalendar(){
+  var el=document.getElementById('rental-cal-body');if(!el)return;
+  var bookings=getBookingsForUnit(_rentalCalUnit);
+  var year=_rentalCalYear,month=_rentalCalMonth;
+  var first=new Date(year,month,1),startDow=first.getDay(),daysInMonth=new Date(year,month+1,0).getDate();
+  var monthName=first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  function isBooked(dateStr){return bookings.some(function(b){return dateStr>=b.start&&dateStr<=b.end;});}
+  var cells='';
+  for(var i=0;i<startDow;i++)cells+='<div></div>';
+  for(var d=1;d<=daysInMonth;d++){
+    var dateStr=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var booked=isBooked(dateStr);
+    cells+='<div style="text-align:center;padding:6px 2px;border-radius:3px;font-size:12px;font-weight:600;background:'+(booked?'#FCEBEB':'#eaf3de')+';color:'+(booked?'#A32D2D':'#1a5c0a')+'">'+d+'</div>';
+  }
+  var dowHtml=['S','M','T','W','T','F','S'].map(function(x){return '<div style="text-align:center;font-size:10px;font-weight:700;color:var(--muted)">'+x+'</div>';}).join('');
+  el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<button class="btn sm" onclick="shiftRentalCalMonth(-1)">&larr;</button>'
+    +'<div style="font-weight:700;font-size:14px">'+monthName+'</div>'
+    +'<button class="btn sm" onclick="shiftRentalCalMonth(1)">&rarr;</button></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">'+dowHtml+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">'+cells+'</div>'
+    +'<div style="display:flex;gap:14px;margin-top:10px;font-size:11px;color:var(--muted)"><span><span style="display:inline-block;width:10px;height:10px;background:#eaf3de;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Available</span><span><span style="display:inline-block;width:10px;height:10px;background:#FCEBEB;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Reserved</span></div>';
+}
+function downloadRentalInvoice(unitId){
+  var u=RENTAL_UNITS[unitId];if(!u)return;
+  if(!(window.jspdf&&window.jspdf.jsPDF)){alert('PDF tool is still loading — give it a second and tap Download again.');return;}
+  var isHarrison=u.location==='Harrison';
+  var shopAddr=isHarrison?'#2 Necessity Ave, Harrison, AR 72601':'1609 Hwy 62 West, Yellville, AR 72687';
+  var shopPhone=isHarrison?'(870) 741-3493':'(870) 449-5234';
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({unit:'pt',format:'letter'});
+  var M=54,y=58;
+  doc.setFont('helvetica','bold');doc.setFontSize(16);
+  doc.text('MILLER HARDWARE COMPANY, INC.',M,y);
+  y+=15;
+  doc.setFont('helvetica','normal');doc.setFontSize(10);
+  doc.text(shopAddr+'    ·    '+shopPhone,M,y);
+  y+=32;
+  doc.setFont('helvetica','bold');doc.setFontSize(13);
+  doc.text('RENTAL ITEM',M,y);
+  y+=20;
+  doc.setFontSize(10);
+  [['SKU',u.sku||''],['Date',today()]].forEach(function(r){doc.setFont('helvetica','bold');doc.text(r[0]+':',M,y);doc.setFont('helvetica','normal');doc.text(String(r[1]),M+100,y);y+=15;});
+  y+=10;
+  doc.autoTable({
+    startY:y,margin:{left:M,right:M},
+    head:[['SKU','Description','Type']],
+    body:[[u.sku||'',[u.brand,u.model].filter(Boolean).join(' '),u.type||'']],
+    theme:'grid',
+    styles:{font:'helvetica',fontSize:10,cellPadding:6,lineColor:[200,200,200],lineWidth:0.5,textColor:[26,26,26]},
+    headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'}
+  });
+  var endY=(doc.lastAutoTable&&doc.lastAutoTable.finalY)||y;
+  doc.setFontSize(9);doc.setTextColor(130);
+  doc.text('Rental item for quote generation — prices set by point of sale.',M,endY+22);
+  doc.save('Miller-Rental-'+(u.sku||'item')+'.pdf');
+}
 function delEquip(){if(editEqIdx===null)return;var cid=editEqCid,idx=editEqIdx;requireAdminDelete('Remove this equipment record?',function(){var arr=custEquip(cid).slice();arr.splice(idx,1);writeEquipment(cid,arr);closeM('eq-modal');openCustDet(cid);});}
 
 function openContactLog(woid){contactLogWOid=woid;document.getElementById('cl-type').value='Called customer';document.getElementById('cl-note').value='';var now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());document.getElementById('cl-dt').value=now.toISOString().slice(0,16);document.getElementById('contact-modal').classList.add('open');}
