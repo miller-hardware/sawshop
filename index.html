@@ -1049,8 +1049,15 @@ function getIntervalMonths(equipType){
   return SVC_INTERVALS.other;
 }
 
+// Picked-up jobs grouped by customer, built once per reminders pass (instead of re-sorting every job for every unit).
+var _pickedUpByCust=null;
+function pickedUpIndex(){
+  if(_pickedUpByCust)return _pickedUpByCust;
+  var idx={};Object.keys(ORDERS).forEach(function(k){var o=ORDERS[k];if(o&&o.status==='Picked Up')(idx[o.custId]=idx[o.custId]||[]).push(o);});
+  return idx;
+}
 function lastServiceDate(custId,equipType){
-  var orders=orderArr().filter(function(o){return o.custId===custId&&o.status==='Picked Up';});
+  var orders=(pickedUpIndex()[custId]||[]).slice();
   if(equipType){orders=orders.filter(function(o){return(o.equipType||'').toLowerCase().indexOf((equipType||'').toLowerCase().split(' ')[0])>=0;});}
   if(!orders.length)return null;
   var dates=orders.map(function(o){return o.dateOut||o.dateIn||'';}).filter(Boolean).sort();
@@ -1060,6 +1067,7 @@ function lastServiceDate(custId,equipType){
 function buildReminders(){
   var reminders=[];
   var now=new Date();
+  _pickedUpByCust=null;_pickedUpByCust=pickedUpIndex();   // fresh index for this pass
   custArr().forEach(function(c){
     var eq=custEquip(c.id);
     eq.forEach(function(e,i){
@@ -1092,7 +1100,7 @@ function buildReminders(){
           reminders.push({type:'warranty',custId:c.id,eqIdx:i,
             custName:c.first+' '+c.last,phone:c.phone||'',
             equip:(e.brand||'')+' '+(e.type||'')+(e.model?' — '+e.model:''),
-            detail:ws.label+(e.warrantyNotes?' &middot; '+e.warrantyNotes:''),
+            detail:ws.label+(e.warrantyNotes?' &middot; '+escHtml(e.warrantyNotes):''),
             warrantyExp:e.warrantyExp,equipType:e.type});
         }
       }
@@ -1119,6 +1127,7 @@ function buildReminders(){
     });
   });
   reminders.sort(function(a,b){var o={overdue:0,'due-soon':1,seasonal:2,warranty:3};return(o[a.type]||9)-(o[b.type]||9);});
+  _pickedUpByCust=null;   // don't keep a stale index around after this pass
   return reminders;
 }
 
@@ -1150,8 +1159,8 @@ function renderReminders(){
     return '<div class="reminder-row '+r.type+'">'
       +'<div class="reminder-icon" style="color:'+iconColor+';font-weight:800;font-size:16px">'+icon+'</div>'
       +'<div class="reminder-main">'
-      +'<div class="reminder-name">'+r.custName+(r.phone?' <span style="font-weight:400;font-size:12px;color:var(--muted)">'+r.phone+'</span>':'')+'</div>'
-      +'<div class="reminder-detail">'+r.equip+'</div>'
+      +'<div class="reminder-name">'+escHtml(r.custName)+(r.phone?' <span style="font-weight:400;font-size:12px;color:var(--muted)">'+escHtml(r.phone)+'</span>':'')+'</div>'
+      +'<div class="reminder-detail">'+escHtml(r.equip)+'</div>'
       +'<div class="reminder-detail" style="color:'+(r.type==='overdue'?'var(--red)':r.type==='due-soon'?'#BA7517':'var(--gray2)')+'">'+r.detail+'</div>'
       +(r.lastSvc?'<div class="reminder-meta">Last service: '+r.lastSvc+'</div>':'')
       +'<div class="reminder-actions">'
@@ -1186,14 +1195,6 @@ function textReminder(custId,eqIdx,type){
   var a=document.createElement('a');a.href='sms:'+phone+'?body='+encodeURIComponent(msg);a.click();
 }
 
-function loadLocal(){
-  try{var d=JSON.parse(localStorage.getItem('sawshop_v8')||'{}');
-    ORDERS=d.orders||{};CUSTS=d.customers||{};TECHS=d.techs||['Michael','Tech 2','Tech 3'];VENDORS=d.vendors||[];
-    EQUIPMENT=d.equipment||{};ATTACHMENTS=d.attachments||{};CONTACTLOGS=d.contactlogs||{};nextWO=d.nextWO||1001;
-    if(d.svcIntervals)SVC_INTERVALS=d.svcIntervals;
-    if(d.settings)SETTINGS=Object.assign(SETTINGS,d.settings);
-  }catch(e){}
-}
 function saveLocal(){try{localStorage.setItem('sawshop_v8',JSON.stringify({orders:ORDERS,customers:CUSTS,techs:TECHS,vendors:VENDORS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,nextWO:nextWO,svcIntervals:SVC_INTERVALS,settings:SETTINGS}));}catch(e){}}
 
 function saveIntervals(){
@@ -1204,8 +1205,7 @@ function saveIntervals(){
     trimmer:parseInt(document.getElementById('si-trimmer').value)||18,
     other:parseInt(document.getElementById('si-other').value)||18
   };
-  saveLocal();
-  if(DB)DB.ref('svcIntervals').set(SVC_INTERVALS);
+  if(DB)DB.ref('svcIntervals').set(SVC_INTERVALS);else saveLocal();
 }
 
 
@@ -1223,7 +1223,8 @@ function initFB(){
     DB=firebase.database();
     if(c.storageBucket)STORAGE=firebase.storage();
     AUTH=firebase.auth();
-    loadLocal();
+    // Old app versions kept a full copy of customers + jobs in this browser. The live database is the only copy now, so clear it.
+    try{localStorage.removeItem('sawshop_v8');}catch(e){}
     showLogin();
     AUTH.onAuthStateChanged(function(user){
       // Other no-login Miller apps on this same web address (e.g. Delivery) sign in anonymously, and that
@@ -1257,10 +1258,10 @@ function startDataSync(){
     setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
   });
   DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
-  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});renderCustomers();renderBoard();renderOrders();tryOpenWO();});
-  DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();renderBoard();});
+  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});refreshAll();tryOpenWO();});
+  DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();refreshAll();});
   DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
-  DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
+  DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});refreshAll();});
   DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
   DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
   // Live: a setting changed on one device shows up on every device right away.
@@ -1274,8 +1275,7 @@ function startDataSync(){
       catSnap.forEach(function(ch){var v=ch.val();if(!v||typeof v!=='object'||!v.desc)return;v._key=ch.key;n[cat].push(v);});   // skip blanks/ghost lines
     });
     PARTORDERS=n;
-    renderBoard();renderPartOrders();
-    var dv=document.getElementById('tab-daily');if(dv&&dv.classList.contains('active'))renderDaily();
+    refreshAll();
   });
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
   DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
@@ -1379,7 +1379,6 @@ function deleteOrder(id){if(DB){DB.ref('orders/'+id).remove();DB.ref('public_sta
 // Public status mirror — only non-sensitive fields (first name, equipment, status); feeds the customer tracker so real customer data can stay locked.
 function publicStatusFor(o){var c=CUSTS[o.custId]||{};return {woNum:o.woNum||null,first:(c.first||'').trim().split(/\s+/)[0]||'',equip:[o.brand,o.equipType].filter(Boolean).join(' '),status:o.status||'Intake',estDate:o.estDate||'',location:o.location||'Yellville',updated:Date.now()};}
 function writePublicStatus(o){if(DB&&o&&o.id){DB.ref('public_status/'+o.id).set(publicStatusFor(o));}}
-function backfillPublicStatus(){if(!DB)return 0;var n=0;Object.keys(ORDERS).forEach(function(k){var o=ORDERS[k];if(!o.id)o.id=k;writePublicStatus(o);n++;});DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);return n;}
 function writeCust(c){if(DB){DB.ref('customers/'+c.id).set(c);}else{CUSTS[c.id]=c;saveLocal();renderCustomers();}}
 function writeTechs(){if(DB){DB.ref('techs').set(TECHS);}else{saveLocal();}}
 function writeEquipment(cid,eq){if(DB){DB.ref('equipment/'+cid).set(eq);}else{EQUIPMENT[cid]=eq;saveLocal();renderReminders();}}
@@ -1418,7 +1417,6 @@ function poRemove(cat,p){
   var cur=poFind(cat,p)||p,arr=PARTORDERS[cat]||[],at=arr.indexOf(cur);if(at>=0)arr.splice(at,1);
   if(DB){if(cur._key)DB.ref('partorders/'+cat+'/'+cur._key).remove();}else saveLocal();
 }
-function writePartOrders(){if(!DB)saveLocal();}   // offline mode only — online saves go through poAdd/poUpdate/poRemove
 
 function addTech(){var n=document.getElementById('new-tech').value.trim();if(!n||TECHS.indexOf(n)>=0)return;TECHS.push(n);writeTechs();renderTechs();populateTechSels();document.getElementById('new-tech').value='';}
 function removeTech(n){dangerConfirm('Remove technician?','Remove '+n+' from the technician list?\n\nTheir open jobs will move to the Unassigned column on Shop Load (tagged with their name) until you reassign them.','Yes, remove',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();renderBoard();});}
@@ -1529,7 +1527,7 @@ function renderStaleOrders(){
     var ck=document.createElement('input');ck.type='checkbox';ck.className='stale-ck';ck.value=o.id;ck.style.cssText='width:15px;height:15px;accent-color:var(--red);flex-shrink:0';
     var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
     var d=Math.floor((Date.now()-dateStrMs(o.dateIn))/86400000);
-    info.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' &mdash; '+(o.brand||'')+' '+(o.equipType||'')+' <span style="color:var(--muted)">&middot; in '+o.dateIn+' ('+d+' days) &middot; '+(o.location||'Yellville')+'</span>';
+    info.innerHTML='<strong>#'+o.woNum+'</strong> '+escHtml(c.first||'')+' '+escHtml(c.last||'')+' &mdash; '+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')+' <span style="color:var(--muted)">&middot; in '+o.dateIn+' ('+d+' days) &middot; '+(o.location||'Yellville')+'</span>';
     var view=document.createElement('button');view.className='btn sm';view.textContent='View';view.style.flexShrink='0';
     view.onclick=function(e){e.preventDefault();e.stopPropagation();openDet(o.id);};
     row.appendChild(ck);row.appendChild(info);row.insertAdjacentHTML('beforeend',badge(o.status||'Intake'));row.appendChild(view);
@@ -1595,9 +1593,9 @@ function renderEquipmentBackfill(){
   var custCount=Object.keys(custSet).length;
   var shown=results.slice(0,60);
   var rows=shown.map(function(r){
-    var e=r.eq,desc=[e.brand,e.type].filter(Boolean).join(' ')||'Equipment';
-    var detail=[e.model?'Model '+e.model:'',e.serial?'SN '+e.serial:''].filter(Boolean).join(' &middot; ');
-    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)"><strong>'+r.custName+'</strong> &mdash; '+desc+(detail?' ('+detail+')':'')+' <span style="color:var(--muted)">from WO #'+r.sourceWoNum+'</span></div>';
+    var e=r.eq,desc=escHtml([e.brand,e.type].filter(Boolean).join(' ')||'Equipment');
+    var detail=[e.model?'Model '+escHtml(e.model):'',e.serial?'SN '+escHtml(e.serial):''].filter(Boolean).join(' &middot; ');
+    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)"><strong>'+escHtml(r.custName)+'</strong> &mdash; '+desc+(detail?' ('+detail+')':'')+' <span style="color:var(--muted)">from WO #'+r.sourceWoNum+'</span></div>';
   }).join('');
   var more=results.length>shown.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">&hellip;and '+(results.length-shown.length)+' more.</div>':'';
   el.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--dark)">'+results.length+' equipment record'+(results.length!==1?'s':'')+' would be created across '+custCount+' customer'+(custCount!==1?'s':'')+':</div>'
@@ -1663,8 +1661,8 @@ function renderBrandCleanup(){
   if(!changes.length){el.innerHTML='<div style="font-size:13px;color:var(--muted);font-style:italic">No known brand misspellings found.</div>';return;}
   var shown=changes.slice(0,60);
   var rows=shown.map(function(c){
-    var label=c.kind==='order'?('WO #'+c.woNum):('Equipment on '+(c.custName||'customer'));
-    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)">'+label+': <span style="text-decoration:line-through;color:var(--muted)">'+c.oldBrand+'</span> &rarr; <strong>'+c.newBrand+'</strong></div>';
+    var label=c.kind==='order'?('WO #'+c.woNum):('Equipment on '+escHtml(c.custName||'customer'));
+    return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)">'+label+': <span style="text-decoration:line-through;color:var(--muted)">'+escHtml(c.oldBrand)+'</span> &rarr; <strong>'+escHtml(c.newBrand)+'</strong></div>';
   }).join('');
   var more=changes.length>shown.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">&hellip;and '+(changes.length-shown.length)+' more.</div>':'';
   el.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--dark)">'+changes.length+' brand name'+(changes.length!==1?'s':'')+' would be fixed:</div>'
@@ -1711,8 +1709,8 @@ function renderCustomerCleanup(){
     var nameChanged=c.newFirst!==c.oldFirst||c.newLast!==c.oldLast;
     var phoneChanged=c.newPhone!==c.oldPhone;
     var bits=[];
-    if(nameChanged)bits.push('<span style="text-decoration:line-through;color:var(--muted)">'+((c.oldFirst||'')+' '+(c.oldLast||'')).trim()+'</span> &rarr; <strong>'+((c.newFirst||'')+' '+(c.newLast||'')).trim()+'</strong>');
-    if(phoneChanged)bits.push('<span style="text-decoration:line-through;color:var(--muted)">'+(c.oldPhone||'&mdash;')+'</span> &rarr; <strong>'+(c.newPhone||'&mdash;')+'</strong>');
+    if(nameChanged)bits.push('<span style="text-decoration:line-through;color:var(--muted)">'+(escHtml(c.oldFirst||'')+' '+escHtml(c.oldLast||'')).trim()+'</span> &rarr; <strong>'+(escHtml(c.newFirst||'')+' '+escHtml(c.newLast||'')).trim()+'</strong>');
+    if(phoneChanged)bits.push('<span style="text-decoration:line-through;color:var(--muted)">'+(escHtml(c.oldPhone)||'&mdash;')+'</span> &rarr; <strong>'+(escHtml(c.newPhone)||'&mdash;')+'</strong>');
     return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--off)">'+bits.join(' &middot; ')+'</div>';
   }).join('');
   var more=changes.length>shown.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">&hellip;and '+(changes.length-shown.length)+' more.</div>':'';
@@ -1749,13 +1747,13 @@ function renderDupCustomers(){
     var rows=g.customers.map(function(c){
       var n=Object.values(ORDERS).filter(function(o){return o.custId===c.id;}).length;
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--off)">'
-        +'<div style="min-width:0"><div style="font-size:13px;font-weight:700">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'
-        +'<div style="font-size:11px;color:var(--muted)">'+(c.phone||'no phone on file')+' &middot; '+n+' work order'+(n!==1?'s':'')+'</div></div>'
+        +'<div style="min-width:0"><div style="font-size:13px;font-weight:700">'+(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim()+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+escHtml(c.phone||'no phone on file')+' &middot; '+n+' work order'+(n!==1?'s':'')+'</div></div>'
         +'<button class="btn sm" style="flex-shrink:0" onclick="closeM(\'det-modal\');openCustDet(\''+c.id+'\')">View</button>'
         +'</div>';
     }).join('');
     var mergeBtns=g.customers.length===2?('<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
-      +g.customers.map(function(c,i){var other=g.customers[1-i];return '<button class="btn sm primary" onclick="mergeCustomersUI(\''+c.id+'\',\''+other.id+'\')">Merge &rarr; keep &ldquo;'+((c.first||'')+' '+(c.last||'')).trim()+'&rdquo;</button>';}).join('')
+      +g.customers.map(function(c,i){var other=g.customers[1-i];return '<button class="btn sm primary" onclick="mergeCustomersUI(\''+c.id+'\',\''+other.id+'\')">Merge &rarr; keep &ldquo;'+(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim()+'&rdquo;</button>';}).join('')
       +'</div>'):'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px">3+ matches &mdash; merge one pair at a time via View, or ask for a multi-way merge.</div>';
     return '<div style="background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:8px 10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#BA7517;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">&#9888; '+g.reason+'</div>'+rows+mergeBtns+'</div>';
   }).join('');
@@ -1798,13 +1796,40 @@ function mergeCustomers(keepId,loseId){
   }).catch(function(e){alert('Merge failed: '+e.message);});
 }
 function custEquip(cid){return EQUIPMENT[cid]||[];}
-function refreshAll(){renderBoard();renderOrders();renderReminders();renderCustomers();renderPartOrders();renderDaily();}
+// ── Redraws: a burst of changes (e.g. startup, or several saves at once) is combined into ONE redraw, and only the
+// tab on screen is redrawn. Other tabs redraw fresh when you switch to them (showTab). The Reminders badge in the
+// tab bar is always kept current.
+var _redrawT=null;
+function activeTab(){var v=document.querySelector('.view.active');return v?v.id.replace('tab-',''):'board';}
+function renderTab(t){
+  if(t==='board')renderBoard();
+  else if(t==='customers')renderCustomers();
+  else if(t==='daily')renderDaily();
+  else if(t==='parts')renderPartOrders();
+  else if(t==='orders')renderOrders();
+  else if(t==='rental')renderRentalFleet();
+  // Settings is not auto-redrawn: it would wipe checkboxes someone is in the middle of ticking.
+}
+function refreshAll(){
+  if(_redrawT)return;
+  _redrawT=setTimeout(function(){
+    _redrawT=null;
+    var t=activeTab();
+    try{renderTab(t);}catch(e){console.error(e);}
+    try{renderReminders();}catch(e){console.error(e);}   // keeps the tab-bar badge right; cheap now
+  },60);
+}
 
 function showTab(t){
   var tabs=['board','customers','daily','reminders','parts','orders','rental','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
+  if(t==='board')renderBoard();
+  if(t==='customers')renderCustomers();
+  if(t==='orders')renderOrders();
+  if(t==='rental')renderRentalFleet();
+  if(t==='reminders')renderReminders();
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
   if(t==='settings'){renderInstallBox();renderStageLimits();renderStaleOrders();renderTruncatedParts();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}
@@ -1837,8 +1862,8 @@ function renderBoard(){
     var cards=jobs.length?jobs.map(function(o){
       var c=CUSTS[o.custId]||{};var isWaiting=o.status==='Waiting on Parts',isCust=o.status==='Waiting on Customer';
       return '<div class="board-card'+(o.urgent?' urgent':isWaiting?' waiting':isCust?' custwait':'')+'" onclick="openDet(\''+o.id+'\')">'
-        +'<div class="bc-wo">#'+o.woNum+'</div><div class="bc-cust">'+(c.first||'')+' '+(c.last||'')+'</div>'
-        +'<div class="bc-equip">'+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
+        +'<div class="bc-wo">#'+o.woNum+'</div><div class="bc-cust">'+escHtml(c.first||'')+' '+escHtml(c.last||'')+'</div>'
+        +'<div class="bc-equip">'+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')+(o.model?' — '+escHtml(o.model):'')+'</div>'
         +'<div class="bc-meta">'+badge(o.status||'Intake')+(o.tech&&o.tech!=='Unassigned'&&TECHS.indexOf(o.tech)<0?'<span class="stage-age" title="This tech is no longer on the tech list - reassign in Edit">was: '+escHtml(o.tech)+'</span>':'')+stageAgeChip(o)+quickChip(o)+authChip(o)+(o.urgent?'<span class="badge b-urgent">!</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
         +'</div>';
     }).join(''):'<div class="board-empty">No open orders</div>';
@@ -1857,14 +1882,14 @@ function renderOrders(){
 
 function woRow(o,c){
   var isWaiting=o.status==='Waiting on Parts';
-  var custName=(c&&(c.first||c.last))?(c.first||'')+' '+(c.last||''):'—';
-  var equip=[o.brand,o.equipType,o.model?'— '+o.model:''].filter(Boolean).join(' ');
+  var custName=(c&&(c.first||c.last))?escHtml(c.first||'')+' '+escHtml(c.last||''):'—';
+  var equip=[escHtml(o.brand),escHtml(o.equipType),o.model?'— '+escHtml(o.model):''].filter(Boolean).join(' ');
   return '<div class="wo-row'+(o.urgent?' urgent':isWaiting?' waiting':'')+'" onclick="openDet(\''+o.id+'\')">'  
-    +'<span class="wo-num">#'+o.woNum+(o.tag?'<br><span style="font-size:10px;color:var(--muted);font-weight:400">Tag: '+o.tag+'</span>':'')+'</span>'
+    +'<span class="wo-num">#'+o.woNum+(o.tag?'<br><span style="font-size:10px;color:var(--muted);font-weight:400">Tag: '+escHtml(o.tag)+'</span>':'')+'</span>'
     +'<div class="wo-main">'
-    +'<div class="wo-cust">'+custName+(c&&c.phone?'<span style="font-size:19px;font-weight:700;color:var(--dark);margin-left:12px">'+c.phone+'</span>':'')+'</div>'
-    +'<div class="wo-equip">'+equip+(o.serial?' | SN: '+o.serial:'')+(isWaiting&&o.partsWaiting?' · '+o.partsWaiting:'')+'</div>'
-    +(o.dateIn?'<div style="font-size:15px;font-weight:700;color:var(--muted);margin-top:3px">In: '+o.dateIn+(o.estDate?' · Est: '+o.estDate:'')+(o.tech?' · '+o.tech:'')+'</div>':'')
+    +'<div class="wo-cust">'+custName+(c&&c.phone?'<span style="font-size:19px;font-weight:700;color:var(--dark);margin-left:12px">'+escHtml(c.phone)+'</span>':'')+'</div>'
+    +'<div class="wo-equip">'+equip+(o.serial?' | SN: '+escHtml(o.serial):'')+(isWaiting&&o.partsWaiting?' · '+escHtml(o.partsWaiting):'')+'</div>'
+    +(o.dateIn?'<div style="font-size:15px;font-weight:700;color:var(--muted);margin-top:3px">In: '+o.dateIn+(o.estDate?' · Est: '+o.estDate:'')+(o.tech?' · '+escHtml(o.tech):'')+'</div>':'')
     +'</div>'
     +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+stageAgeChip(o)+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
     +'</div>';
@@ -1876,7 +1901,8 @@ function renderCustomers(){
   var list=custArr().filter(function(c){if(!raw)return true;if(isPhone){var ph=(c.phone||'').replace(/\D/g,''),qq=raw.replace(/\D/g,'');return ph.indexOf(qq)>=0;}var parts=raw.trim().split(/\s+/),fn=(c.first||'').toLowerCase(),ln=(c.last||'').toLowerCase();if(parts.length>=2)return(fn.indexOf(parts[0])>=0&&ln.indexOf(parts[1])>=0)||(fn.indexOf(parts[1])>=0&&ln.indexOf(parts[0])>=0);return fn.indexOf(raw)>=0||ln.indexOf(raw)>=0||(c.phone||'').indexOf(raw)>=0;});
   var el=document.getElementById('cust-list');
   if(!list.length){el.innerHTML='<div class="empty">No customers found.</div>';return;}
-  el.innerHTML=list.map(function(c){var wos=orderArr().filter(function(o){return o.custId===c.id;}),open=wos.filter(function(o){return o.status!=='Picked Up';}).length,eq=custEquip(c.id);return '<div class="card" style="cursor:pointer" onclick="openCustDet(\''+c.id+'\')">'+'<div style="display:flex;align-items:center;justify-content:space-between"><div><strong style="font-size:14px;font-weight:700">'+c.first+' '+c.last+'</strong>'+(c.phone?'<span style="margin-left:10px;font-size:12px;color:var(--muted)">'+c.phone+'</span>':'')+'</div>'+'<div style="font-size:12px;color:var(--muted)">'+wos.length+' order'+(wos.length!==1?'s':'')+(open?' &middot; <strong style="color:var(--red)">'+open+' open</strong>':'')+(eq.length?' &middot; '+eq.length+' unit'+(eq.length!==1?'s':''):'')+'</div></div>'+(c.notes?'<div style="font-size:12px;color:var(--gray2);margin-top:3px">'+c.notes+'</div>':'')+(eq.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+eq.slice(0,3).map(function(e){return(e.brand||'')+(e.model?' '+e.model:'');}).join(' &middot; ')+(eq.length>3?' +more':'')+'</div>':'')+'</div>';}).join('');
+  var byCust={};Object.keys(ORDERS).forEach(function(k){var o=ORDERS[k];(byCust[o.custId]=byCust[o.custId]||[]).push(o);});   // one pass, not one sort per customer
+  el.innerHTML=list.map(function(c){var wos=byCust[c.id]||[],open=wos.filter(function(o){return o.status!=='Picked Up';}).length,eq=custEquip(c.id);return '<div class="card" style="cursor:pointer" onclick="openCustDet(\''+c.id+'\')">'+'<div style="display:flex;align-items:center;justify-content:space-between"><div><strong style="font-size:14px;font-weight:700">'+escHtml(c.first)+' '+escHtml(c.last)+'</strong>'+(c.phone?'<span style="margin-left:10px;font-size:12px;color:var(--muted)">'+escHtml(c.phone)+'</span>':'')+'</div>'+'<div style="font-size:12px;color:var(--muted)">'+wos.length+' order'+(wos.length!==1?'s':'')+(open?' &middot; <strong style="color:var(--red)">'+open+' open</strong>':'')+(eq.length?' &middot; '+eq.length+' unit'+(eq.length!==1?'s':''):'')+'</div></div>'+(c.notes?'<div style="font-size:12px;color:var(--gray2);margin-top:3px">'+escHtml(c.notes)+'</div>':'')+(eq.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+eq.slice(0,3).map(function(e){return escHtml(e.brand||'')+(e.model?' '+escHtml(e.model):'');}).join(' &middot; ')+(eq.length>3?' +more':'')+'</div>':'')+'</div>';}).join('');
 }
 
 // ── Smart promise date: suggests Est. Completion from recent turnaround + load ──
@@ -2155,13 +2181,13 @@ function renderRentalFleet(){
   el.innerHTML=list.map(function(u){
     return '<div class="card" style="margin-bottom:0">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-      +'<div style="min-width:0"><div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em">SKU '+(u.sku||'&mdash;')+'</div>'
+      +'<div style="min-width:0"><div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em">SKU '+(escHtml(u.sku)||'&mdash;')+'</div>'
       +'<div style="font-size:16px;font-weight:800">'+[(u.brand||''),(u.type||'')].filter(Boolean).join(' ')+'</div>'
-      +'<div style="font-size:12px;color:var(--gray2)">'+[u.model?'Model '+u.model:'',u.serial?'SN '+u.serial:''].filter(Boolean).join(' &middot; ')+'</div></div>'
+      +'<div style="font-size:12px;color:var(--gray2)">'+[u.model?'Model '+escHtml(u.model):'',u.serial?'SN '+escHtml(u.serial):''].filter(Boolean).join(' &middot; ')+'</div></div>'
       +'<span class="badge '+(statusCls[u.status]||'b-intake')+'" style="flex-shrink:0">'+(u.status||'Available')+'</span>'
       +'</div>'
-      +'<div style="font-size:11px;color:var(--muted);margin-top:6px">'+(u.location||'')+(u.vendor?' &middot; Vendor: '+u.vendor:'')+'</div>'
-      +(u.notes?'<div style="font-size:12px;color:var(--gray2);font-style:italic;margin-top:5px">'+u.notes+'</div>':'')
+      +'<div style="font-size:11px;color:var(--muted);margin-top:6px">'+(u.location||'')+(u.vendor?' &middot; Vendor: '+escHtml(u.vendor):'')+'</div>'
+      +(u.notes?'<div style="font-size:12px;color:var(--gray2);font-style:italic;margin-top:5px">'+escHtml(u.notes)+'</div>':'')
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
       +'<button class="btn sm" onclick="openEditRentalUnit(\''+u.id+'\')">Edit</button>'
       +'<button class="btn sm" onclick="openRentalCalendar(\''+u.id+'\')">&#128197; Calendar</button>'
@@ -2249,7 +2275,7 @@ function rsvCustSearch(){
   matches.forEach(function(c){
     var div=document.createElement('div');
     div.style.cssText='padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--off)';
-    div.innerHTML='<strong>'+c.first+' '+c.last+'</strong>'+(c.phone?' <span style="color:var(--muted);font-size:12px">'+c.phone+'</span>':'');
+    div.innerHTML='<strong>'+escHtml(c.first)+' '+escHtml(c.last)+'</strong>'+(c.phone?' <span style="color:var(--muted);font-size:12px">'+escHtml(c.phone)+'</span>':'');
     div.onmouseover=function(){this.style.background='var(--off)';};
     div.onmouseout=function(){this.style.background='';};
     div.onclick=function(){rsvCustSelect(c.id);};
@@ -2298,7 +2324,7 @@ function attemptReservation(){
   }
   var cc=CUSTS[conflict.custId]||{};
   document.getElementById('rsv-warning').style.display='block';
-  document.getElementById('rsv-warning').innerHTML='<strong>&#9888; Already booked '+conflict.start+' to '+conflict.end+'</strong> for '+((cc.first||'')+' '+(cc.last||'')).trim()+'. You can add this customer to the waitlist, or reserve anyway if you know it\'ll work out.';
+  document.getElementById('rsv-warning').innerHTML='<strong>&#9888; Already booked '+conflict.start+' to '+conflict.end+'</strong> for '+(escHtml(cc.first||'')+' '+escHtml(cc.last||'')).trim()+'. You can add this customer to the waitlist, or reserve anyway if you know it\'ll work out.';
   document.getElementById('rsv-mfoot-default').style.display='none';
   document.getElementById('rsv-mfoot-conflict').style.display='flex';
   _rsvPending={custId:custId,start:start,end:end,notes:document.getElementById('rsv-notes').value.trim()};
@@ -2438,13 +2464,13 @@ function renderRentalCalList(){
       var actionBtn=status==='reserved'?'<button class="btn sm primary" style="flex-shrink:0" onclick="openRentalInspect(\''+b.id+'\',\'checkout\')">Check Out</button>'
         :status==='checked_out'?'<button class="btn sm primary" style="flex-shrink:0" onclick="openRentalInspect(\''+b.id+'\',\'checkin\')">Check In</button>'
         :'<span class="badge b-ready" style="flex-shrink:0">Returned</span>';
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+((c.first||'')+' '+(c.last||'')).trim()+'</strong> &middot; '+b.start+' &rarr; '+b.end+(b.notes?' &middot; '+b.notes:'')+'</div><div style="display:flex;gap:5px;flex-shrink:0">'+actionBtn+(status==='reserved'?'<button class="btn sm del" style="padding:2px 7px" onclick="cancelReservation(\''+b.id+'\')">&#x2715;</button>':'')+'</div></div>';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim()+'</strong> &middot; '+b.start+' &rarr; '+b.end+(b.notes?' &middot; '+escHtml(b.notes):'')+'</div><div style="display:flex;gap:5px;flex-shrink:0">'+actionBtn+(status==='reserved'?'<button class="btn sm del" style="padding:2px 7px" onclick="cancelReservation(\''+b.id+'\')">&#x2715;</button>':'')+'</div></div>';
     }).join('');
   }
   if(waitlist.length){
     html+='<div class="sect-lbl" style="margin-top:10px">Waitlist</div>'+waitlist.map(function(w){
       var c=CUSTS[w.custId]||{};
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+((c.first||'')+' '+(c.last||'')).trim()+'</strong> &middot; wants '+w.desiredStart+' &rarr; '+w.desiredEnd+(w.notes?' &middot; '+w.notes:'')+'</div><button class="btn sm del" style="flex-shrink:0;padding:2px 7px" onclick="removeFromWaitlist(\''+w.id+'\')">&#x2715;</button></div>';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--off);font-size:12px"><div><strong>'+(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim()+'</strong> &middot; wants '+w.desiredStart+' &rarr; '+w.desiredEnd+(w.notes?' &middot; '+escHtml(w.notes):'')+'</div><button class="btn sm del" style="flex-shrink:0;padding:2px 7px" onclick="removeFromWaitlist(\''+w.id+'\')">&#x2715;</button></div>';
     }).join('');
   }
   el.innerHTML=html;
@@ -2498,16 +2524,16 @@ function newWOForCustEquip(cid,eqIdx){
 
 function openDet(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
-  var prows=(o.parts||[]).map(function(p,pi){return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--off);font-family:monospace;font-size:11px;color:var(--gray2)">'+(p.pn||'')+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off)">'+p.desc+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);text-align:center">'+p.qty+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);color:var(--gray2)">'+(p.note||'')+'</td><td style="padding:3px 4px;border-bottom:1px solid var(--off)"><button onclick="deletePart(\''+id+'\','+pi+')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:2px 5px;font-weight:700">&#x2715;</button></td></tr>';}).join('');
+  var prows=(o.parts||[]).map(function(p,pi){return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--off);font-family:monospace;font-size:11px;color:var(--gray2)">'+escHtml(p.pn||'')+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off)">'+escHtml(p.desc)+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);text-align:center">'+p.qty+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);color:var(--gray2)">'+escHtml(p.note||'')+'</td><td style="padding:3px 4px;border-bottom:1px solid var(--off)"><button onclick="deletePart(\''+id+'\','+pi+')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:2px 5px;font-weight:700">&#x2715;</button></td></tr>';}).join('');
   var stats=STATUS_LIST;
   var sbtns=stats.map(function(s){var isW=s==='Waiting on Parts';return '<button class="sbtn'+(isW?' waiting-btn':'')+(o.status===s?' active':'')+'" onclick="quickStatus(\''+id+'\',\''+s+'\')">'+s+'</button>';}).join('');
   var eqf=[['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];});
   var atts=ATTACHMENTS[id]||[];
-  var attHtml=atts.map(function(a,i){var src=a.url||a.data||'';return '<div class="attach-thumb"><img src="'+src+'" onclick="viewImg(\''+id+'\','+i+')" title="'+a.name+'"><button class="rm-att" onclick="removeAtt(\''+id+'\','+i+')">&#x2715;</button></div>';}).join('');
+  var attHtml=atts.map(function(a,i){var src=a.url||a.data||'';return '<div class="attach-thumb"><img src="'+src+'" onclick="viewImg(\''+id+'\','+i+')" title="'+escHtml(a.name)+'"><button class="rm-att" onclick="removeAtt(\''+id+'\','+i+')">&#x2715;</button></div>';}).join('');
   var logs=CONTACTLOGS[id]||[];
-  var logHtml=logs.length?logs.map(function(l,i){return '<div class="contact-log-entry"><div style="font-weight:600">'+l.type+'</div><div>'+l.note+'</div><div class="cl-meta">'+l.dt+'<button class="btn sm del" onclick="deleteContactLog(\''+id+'\','+i+')" style="margin-left:8px;padding:1px 6px;font-size:10px">remove</button></div></div>';}).join(''):'<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No contact logged yet.</div>';
-  var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+o.partsWaiting+'</div>':'';
-  var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
+  var logHtml=logs.length?logs.map(function(l,i){return '<div class="contact-log-entry"><div style="font-weight:600">'+l.type+'</div><div>'+escHtml(l.note)+'</div><div class="cl-meta">'+escHtml(l.dt)+'<button class="btn sm del" onclick="deleteContactLog(\''+id+'\','+i+')" style="margin-left:8px;padding:1px 6px;font-size:10px">remove</button></div></div>';}).join(''):'<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No contact logged yet.</div>';
+  var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+escHtml(o.partsWaiting)+'</div>':'';
+  var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+escHtml(c.notes)+'</div>':'';
   var authA=parseFloat(o.authAmt),authHtml='';
   if(o.status!=='Picked Up'&&o.status!=='Ready'){
     if(authA>0)authHtml='<div style="background:#eaf3de;border:1.5px solid #9cc68a;border-radius:3px;padding:8px 12px;font-size:13px;color:#1a5c0a;margin-bottom:10px">&#10003; Customer approved repairs up to <strong>$'+authA+'</strong>. Go ahead without calling.</div>';
@@ -2515,19 +2541,19 @@ function openDet(id){
   }
   var linkedPOs=woPartOrders(id);
   var poHtml=linkedPOs.length?'<div style="border:1.5px solid var(--silver);border-radius:3px;padding:8px 12px;margin-bottom:10px;font-size:12px"><div style="font-weight:700;margin-bottom:4px">Parts ordered for this job</div>'
-    +linkedPOs.map(function(x){return '<div style="padding:3px 0;border-top:1px solid var(--off)">'+(x.p.pn?'<span style="font-family:monospace;font-weight:700">'+x.p.pn+'</span> ':'')+x.p.desc+(x.p.qty>1?' &times;'+x.p.qty:'')+' &mdash; '+poStatusText(x.p,x.cat)+'</div>';}).join('')+'</div>':'';
+    +linkedPOs.map(function(x){return '<div style="padding:3px 0;border-top:1px solid var(--off)">'+(x.p.pn?'<span style="font-family:monospace;font-weight:700">'+escHtml(x.p.pn)+'</span> ':'')+escHtml(x.p.desc)+(x.p.qty>1?' &times;'+x.p.qty:'')+' &mdash; '+poStatusText(x.p,x.cat)+'</div>';}).join('')+'</div>':'';
   var diagHtml='<div class="sect-lbl">Quick Diagnosis</div><div style="font-size:11px;color:var(--muted);margin:-2px 0 6px">Tap what you found. It fills in the note and the usual parts, which you can edit before adding.</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
     +DIAG_TEMPLATES.map(function(t,i){return '<button type="button" class="diag-chip" onclick="openDiagPanel(\''+id+'\','+i+')">'+t.name+'</button>';}).join('')
     +'</div><div id="diag-panel-'+id+'"></div>';
   var lookupHtml='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 8px"><button type="button" class="btn sm outline" onclick="openPartsLookup(\''+id+'\',\'pt\')">&#128270; Parts Diagrams (PartsTree)</button><button type="button" class="btn sm outline" onclick="openPartsLookup(\''+id+'\',\'g\')">&#128270; Search Google</button></div>'+partHistoryHtml(id);
   document.getElementById('det-body').innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+' &nbsp;'+stageAgeChip(o)+' '+quickChip(o)+'</div>'+(o.tag||o.ticket?'<div style="margin-top:3px">'+(o.tag?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Tag: '+o.tag+'</span>':'')+(o.tag&&o.ticket?'&nbsp;&nbsp;&middot;&nbsp;&nbsp;':'')+(o.ticket?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Ticket #'+o.ticket+'</span>':'')+'</div>':'')+'<div style="font-size:21px;font-weight:800;margin-top:4px">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Done: '+o.dateOut+'</div>':'')+(o.location||o.intakeBy?'<div style="font-size:14px;font-weight:700;color:var(--dark);margin-top:4px">'+(o.location||'')+(o.intakeBy?(o.location?' &middot; ':'')+'Taken in by '+o.intakeBy:'')+'</div>':'')+'<div style="font-size:17px;font-weight:800;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+' &nbsp;'+stageAgeChip(o)+' '+quickChip(o)+'</div>'+(o.tag||o.ticket?'<div style="margin-top:3px">'+(o.tag?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Tag: '+escHtml(o.tag)+'</span>':'')+(o.tag&&o.ticket?'&nbsp;&nbsp;&middot;&nbsp;&nbsp;':'')+(o.ticket?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Ticket #'+escHtml(o.ticket)+'</span>':'')+'</div>':'')+'<div style="font-size:21px;font-weight:800;margin-top:4px">'+(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+escHtml(c.phone)+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Done: '+o.dateOut+'</div>':'')+(o.location||o.intakeBy?'<div style="font-size:14px;font-weight:700;color:var(--dark);margin-top:4px">'+(o.location||'')+(o.intakeBy?(o.location?' &middot; ':'')+'Taken in by '+o.intakeBy:'')+'</div>':'')+'<div style="font-size:17px;font-weight:800;margin-top:3px">'+escHtml(o.tech||'')+'</div></div></div>'
     +custAlert+authHtml+wStatus+poHtml+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
-    +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
+    +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+escHtml(f[1])+'</div></div>';}).join('')+'</div>'
     +lookupHtml
-    +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
+    +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+escHtml(o.complaint)+'</div></div>':'')
     +'<div class="sect-lbl">Notes</div>'
-    +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
+    +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+escHtml(o.notes)+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-bottom:8px">'
     +'<div style="flex:1;min-width:160px"><div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Add a Note</div><input type="text" id="ql-gen-note-'+id+'" placeholder="Type a note, then tap Add Note" style="width:100%;padding:6px 9px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)"></div>'
     +'<button class="btn sm" id="mic-'+id+'" onclick="startDictation(\''+id+'\')" title="Dictate a note" style="align-self:flex-end;min-width:44px;font-size:15px">&#127908;</button>'
@@ -2626,9 +2652,9 @@ function openCustDet(id){
     var badgeLbl=isService?'Serviced by us':(isSale?'Sold by us':'Customer-owned');
     var datePrefix=isService?'Serviced: ':(isSale?'Sold: ':'Logged: ');
     var ws=e.warrantyExp?warrantyStatus(e.warrantyExp):null;
-    return '<div class="equip-card"><div class="eq-badge"><span class="badge '+badgeCls+'">'+badgeLbl+'</span>'+(ws?'<span class="badge '+ws.cls+'">'+ws.label+'</span>':'')+'</div><div class="eq-brand">'+(e.brand||'')+' '+(e.type||'')+'</div><div class="eq-detail">'+[e.year?'Year: '+e.year:'',e.product?'Product: '+e.product:'',e.model?'Model: '+e.model:'',e.serial?'SN: '+e.serial:'',e.engine?'Engine: '+e.engine:''].filter(Boolean).join(' &middot; ')+'</div>'+(e.date?'<div class="eq-detail">'+datePrefix+e.date+(e.warrantyExp?' &middot; Warranty exp: '+e.warrantyExp:'')+'</div>':'')+(e.warrantyNotes?'<div class="eq-detail">'+e.warrantyNotes+'</div>':'')+(e.notes?'<div class="eq-detail" style="font-style:italic;margin-top:3px">'+e.notes+'</div>':'')+'<div class="eq-actions"><button class="btn sm" onclick="openAddEquip(\''+id+'\','+i+')">Edit</button><button class="btn sm primary" onclick="newWOForCustEquip(\''+id+'\','+i+')">+ Work Order</button></div></div>';
+    return '<div class="equip-card"><div class="eq-badge"><span class="badge '+badgeCls+'">'+badgeLbl+'</span>'+(ws?'<span class="badge '+ws.cls+'">'+ws.label+'</span>':'')+'</div><div class="eq-brand">'+escHtml(e.brand||'')+' '+(e.type||'')+'</div><div class="eq-detail">'+[e.year?'Year: '+escHtml(e.year):'',e.product?'Product: '+escHtml(e.product):'',e.model?'Model: '+escHtml(e.model):'',e.serial?'SN: '+escHtml(e.serial):'',e.engine?'Engine: '+escHtml(e.engine):''].filter(Boolean).join(' &middot; ')+'</div>'+(e.date?'<div class="eq-detail">'+datePrefix+e.date+(e.warrantyExp?' &middot; Warranty exp: '+e.warrantyExp:'')+'</div>':'')+(e.warrantyNotes?'<div class="eq-detail">'+escHtml(e.warrantyNotes)+'</div>':'')+(e.notes?'<div class="eq-detail" style="font-style:italic;margin-top:3px">'+escHtml(e.notes)+'</div>':'')+'<div class="eq-actions"><button class="btn sm" onclick="openAddEquip(\''+id+'\','+i+')">Edit</button><button class="btn sm primary" onclick="newWOForCustEquip(\''+id+'\','+i+')">+ Work Order</button></div></div>';
   }).join(''):'<div class="empty" style="padding:12px 0">No equipment on record.</div>';
-  document.getElementById('det-body').innerHTML='<div style="font-size:17px;font-weight:800;margin-bottom:4px">'+c.first+' '+c.last+'</div>'+(c.phone?'<div style="font-size:13px;color:var(--muted)">'+c.phone+'</div>':'')+(c.email?'<div style="font-size:13px;color:var(--muted)">'+c.email+'</div>':'')+(c.addr?'<div style="font-size:13px;color:var(--muted)">'+c.addr+'</div>':'')+(c.notes?'<div style="font-size:12px;margin-top:8px;padding:8px;background:var(--off);border-radius:3px">'+c.notes+'</div>':'')+'<div class="sect-lbl">Equipment on File ('+eq.length+')</div>'+eqHtml+'<button class="btn outline sm" onclick="openAddEquip(\''+id+'\')" style="margin-bottom:4px">+ Log Equipment / New Sale</button><div class="sect-lbl">Work Order History ('+wos.length+')</div>'+(wos.length?wos.map(function(o){return woRow(o,c);}).join(''):'<div class="empty" style="padding:12px 0">No orders yet.</div>')+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="editCust(\''+id+'\')">Edit Customer</button><button class="btn primary" onclick="closeM(\'det-modal\');openNewWO();setTimeout(function(){setCustById(\''+id+'\');},100)">+ New Order</button></div>';
+  document.getElementById('det-body').innerHTML='<div style="font-size:17px;font-weight:800;margin-bottom:4px">'+escHtml(c.first)+' '+escHtml(c.last)+'</div>'+(c.phone?'<div style="font-size:13px;color:var(--muted)">'+escHtml(c.phone)+'</div>':'')+(c.email?'<div style="font-size:13px;color:var(--muted)">'+escHtml(c.email)+'</div>':'')+(c.addr?'<div style="font-size:13px;color:var(--muted)">'+escHtml(c.addr)+'</div>':'')+(c.notes?'<div style="font-size:12px;margin-top:8px;padding:8px;background:var(--off);border-radius:3px">'+escHtml(c.notes)+'</div>':'')+'<div class="sect-lbl">Equipment on File ('+eq.length+')</div>'+eqHtml+'<button class="btn outline sm" onclick="openAddEquip(\''+id+'\')" style="margin-bottom:4px">+ Log Equipment / New Sale</button><div class="sect-lbl">Work Order History ('+wos.length+')</div>'+(wos.length?wos.map(function(o){return woRow(o,c);}).join(''):'<div class="empty" style="padding:12px 0">No orders yet.</div>')+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="editCust(\''+id+'\')">Edit Customer</button><button class="btn primary" onclick="closeM(\'det-modal\');openNewWO();setTimeout(function(){setCustById(\''+id+'\');},100)">+ New Order</button></div>';
   document.getElementById('det-modal').classList.add('open');
 }
 function editCust(id){var c=CUSTS[id];if(!c)return;editCid=id;document.getElementById('cust-mtitle').textContent='Edit Customer';document.getElementById('c-first').value=c.first||'';document.getElementById('c-last').value=c.last||'';document.getElementById('c-phone').value=c.phone||'';document.getElementById('c-email').value=c.email||'';document.getElementById('c-addr').value=c.addr||'';document.getElementById('c-notes').value=c.notes||'';closeM('det-modal');document.getElementById('cust-modal').classList.add('open');}
@@ -2637,7 +2663,7 @@ function printWO(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
   if(!SIGNATURES[id]){loadSignatures(id,function(){printWO(id);});return;}
   var locAddr=(o.location==='Harrison')?'#2 Necessity Ave &middot; Harrison, AR 72601 &middot; (870) 741-3493':'1609 Hwy 62 West &middot; Yellville, AR 72687 &middot; (870) 449-5234';
-  var custName=((c.first||'')+' '+(c.last||'')).trim();
+  var custName=(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim();
   var equipLine=[o.brand,o.equipType].filter(Boolean).join(' ');
   var qrImg='';
   if(SETTINGS.trackerOn!==false&&typeof qrcode==='function'){try{var _qr=qrcode(0,'M');_qr.addData(trackerLink(o.id));_qr.make();qrImg=_qr.createDataURL(5,8);}catch(e){qrImg='';}}
@@ -2652,7 +2678,7 @@ function printWO(id){
   var existParts=(o.parts||[]).length;
   var prows=(o.parts||[]).map(function(p){
     return '<tr>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc">'+(p.pn?'<strong>'+p.pn+'</strong> — ':'')+p.desc+(p.note?' <span style="color:#888;font-size:10px">('+p.note+')</span>':'')+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc">'+(p.pn?'<strong>'+escHtml(p.pn)+'</strong> — ':'')+escHtml(p.desc)+(p.note?' <span style="color:#888;font-size:10px">('+escHtml(p.note)+')</span>':'')+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center"></td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+p.qty+'</td>'
       +'</tr>';
@@ -2672,20 +2698,20 @@ function printWO(id){
     +'<div style="text-align:right">'
     +'<div style="display:inline-block;border:1.5px solid #555;padding:2px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555;margin-bottom:5px">COUNTER COPY</div>'
     +'<div style="font-size:42px;font-weight:800;line-height:1">#'+o.woNum+'</div>'
-    +(o.tag?'<div style="font-size:15px;font-weight:700;color:#333;margin-top:3px">Hang Tag: '+o.tag+'</div>':'')
+    +(o.tag?'<div style="font-size:15px;font-weight:700;color:#333;margin-top:3px">Hang Tag: '+escHtml(o.tag)+'</div>':'')
     +'</div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:14px">'
     +'<div>'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Customer</div>'
     +'<div style="font-size:24px;font-weight:800;line-height:1.1">'+custName+'</div>'
-    +(c.phone?'<div style="font-size:21px;font-weight:800;color:#1a1a1a;margin-top:5px">'+c.phone+'</div>':'')
-    +(c.addr?'<div style="font-size:12px;color:#777;margin-top:3px">'+c.addr+'</div>':'')
+    +(c.phone?'<div style="font-size:21px;font-weight:800;color:#1a1a1a;margin-top:5px">'+escHtml(c.phone)+'</div>':'')
+    +(c.addr?'<div style="font-size:12px;color:#777;margin-top:3px">'+escHtml(c.addr)+'</div>':'')
     +'</div>'
     +'<div>'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Equipment</div>'
-    +(equipLine?'<div style="font-size:18px;font-weight:700;margin-bottom:5px">'+equipLine+'</div>':'')
-    +([['Year',o.year],['Model',o.model],['Serial #',o.serial],['Engine',o.engine]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:12px;color:#444;margin-bottom:2px"><strong>'+f[0]+':</strong> '+f[1]+'</div>';}).join(''))
+    +(equipLine?'<div style="font-size:18px;font-weight:700;margin-bottom:5px">'+escHtml(equipLine)+'</div>':'')
+    +([['Year',o.year],['Model',o.model],['Serial #',o.serial],['Engine',o.engine]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:12px;color:#444;margin-bottom:2px"><strong>'+f[0]+':</strong> '+escHtml(f[1])+'</div>';}).join(''))
     +'</div>'
     +'</div>'
     +'<div style="display:flex;border:1.5px solid #1a1a1a;margin-bottom:14px">'
@@ -2699,10 +2725,10 @@ function printWO(id){
     +'</div>'
     +'<div style="flex:1;padding:10px 12px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Assigned Tech</div>'
-    +'<div style="font-size:16px;font-weight:700">'+(o.tech||'&mdash;')+'</div>'
+    +'<div style="font-size:16px;font-weight:700">'+(escHtml(o.tech)||'&mdash;')+'</div>'
     +'</div>'
     +'</div>'
-    +(o.complaint?'<div style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Customer Complaint</div><div style="font-size:13px;padding:10px 12px;background:#f6f4f1;border-left:3px solid #1a1a1a;line-height:1.5">'+o.complaint+'</div></div>':'')
+    +(o.complaint?'<div style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Customer Complaint</div><div style="font-size:13px;padding:10px 12px;background:#f6f4f1;border-left:3px solid #1a1a1a;line-height:1.5">'+escHtml(o.complaint)+'</div></div>':'')
     +'<div style="margin-bottom:12px;padding:8px 12px;border:1.5px solid #1a1a1a;font-size:12px"><strong>Repair approval:</strong> '+(parseFloat(o.authAmt)>0?'Customer approves repairs up to <strong>$'+parseFloat(o.authAmt)+'</strong> without further contact. We will call before going over this amount.':'Customer approves repairs up to $________ without further contact. (Blank = call before repairs.)')+'</div>'
     +qrBlock
     +sigBlock
@@ -2723,8 +2749,8 @@ function printWO(id){
     +'<div style="text-align:right">'
     +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555">Service Work Order</div>'
     +'<div style="font-size:28px;font-weight:800;line-height:1">#'+o.woNum+'</div>'
-    +(o.tag?'<div style="font-size:12px;font-weight:700">Tag # '+o.tag+'</div>':'')
-    +(o.ticket?'<div style="font-size:11px;color:#555">Open Ticket # '+o.ticket+'</div>':'')
+    +(o.tag?'<div style="font-size:12px;font-weight:700">Tag # '+escHtml(o.tag)+'</div>':'')
+    +(o.ticket?'<div style="font-size:11px;color:#555">Open Ticket # '+escHtml(o.ticket)+'</div>':'')
     +(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')
     +(o.estDate?'<div style="font-size:11px;color:#555">Est. Done: '+o.estDate+'</div>':'')
     +'<div style="font-size:12px;font-weight:800;margin-top:3px;border:1.5px solid #1a1a1a;padding:2px 6px;display:inline-block">'+(parseFloat(o.authAmt)>0?'OK TO REPAIR UP TO $'+parseFloat(o.authAmt):'CALL BEFORE REPAIRS')+'</div>'
@@ -2736,19 +2762,19 @@ function printWO(id){
     +'<div style="border:1px solid #888;padding:6px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">Customer</div>'
     +'<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+custName+'</div>'
-    +(c.phone?'<div style="font-size:15px;font-weight:800;margin-bottom:2px">Ph: '+c.phone+'</div>':'')
-    +(c.email?'<div style="font-size:11px;margin-bottom:1px"><strong>Email:</strong> '+c.email+'</div>':'')
-    +(c.addr?'<div style="font-size:11px"><strong>Address:</strong> '+c.addr+'</div>':'')
+    +(c.phone?'<div style="font-size:15px;font-weight:800;margin-bottom:2px">Ph: '+escHtml(c.phone)+'</div>':'')
+    +(c.email?'<div style="font-size:11px;margin-bottom:1px"><strong>Email:</strong> '+escHtml(c.email)+'</div>':'')
+    +(c.addr?'<div style="font-size:11px"><strong>Address:</strong> '+escHtml(c.addr)+'</div>':'')
     +'</div>'
     +'<div style="border:1px solid #888;padding:6px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">Equipment</div>'
-    +([['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:11px;margin-bottom:1px"><strong>'+f[0]+':</strong> '+f[1]+'</div>';}).join(''))
-    +'<div style="font-size:11px;margin-top:2px"><strong>Tech:</strong> '+(o.tech||'________________')+'</div>'
+    +([['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:11px;margin-bottom:1px"><strong>'+f[0]+':</strong> '+escHtml(f[1])+'</div>';}).join(''))
+    +'<div style="font-size:11px;margin-top:2px"><strong>Tech:</strong> '+escHtml(o.tech||'________________')+'</div>'
     +'</div>'
     +'</div>'
     +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Customer Complaint / Reason for Service</div>'
-    +(o.complaint?'<div style="font-size:11px;margin-bottom:5px;padding:3px 5px;background:#f6f4f1">'+o.complaint+'</div>':'')
+    +(o.complaint?'<div style="font-size:11px;margin-bottom:5px;padding:3px 5px;background:#f6f4f1">'+escHtml(o.complaint)+'</div>':'')
     +lines(1)
     +'</div>'
     +'<div style="border:1.5px solid #1a1a1a;padding:6px;margin-bottom:5px;display:flex;gap:12px">'
@@ -2761,7 +2787,7 @@ function printWO(id){
     +'</div>'
     +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:5px">Diagnosis &amp; Work Performed</div>'
-    +(o.notes?'<div style="font-size:10px;padding:3px 5px;background:#f6f4f1;margin-bottom:5px"><strong>Notes:</strong> '+o.notes+'</div>':'')
+    +(o.notes?'<div style="font-size:10px;padding:3px 5px;background:#f6f4f1;margin-bottom:5px"><strong>Notes:</strong> '+escHtml(o.notes)+'</div>':'')
     +lines(8)
     +'</div>'
     +'<div style="border:1px solid #888;padding:6px;margin-bottom:5px">'
@@ -2800,7 +2826,7 @@ function exportCSV(type){
   if(type==='orders'){rows=[['WO#','Location','Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Hours / Condition','Status','Parts Waiting','Tech','Date In','Est Date','Date Out','Urgent','Quick Job','Approved Up To $','Parts','Complaint','Notes']];orderArr().forEach(function(o){var c=CUSTS[o.custId]||{};rows.push([o.woNum,o.location||'Yellville',(c.first||'')+' '+(c.last||''),c.phone||'',o.equipType||'',o.brand||'',o.year||'',o.model||'',o.serial||'',o.engine||'',o.hours||'',o.status||'',o.partsWaiting||'',o.tech||'',o.dateIn||'',o.estDate||'',o.dateOut||'',o.urgent?'Yes':'No',o.quick?'Yes':'No',o.authAmt||'',(o.parts||[]).map(function(p){return (p.pn?p.pn+' ':'')+(p.desc||'')+(p.qty>1?' x'+p.qty:'');}).join('; '),o.complaint||'',o.notes||'']);});fn='sawshop-orders-'+today()+'.csv';}
   else if(type==='customers'){rows=[['First','Last','Phone','Email','Address','Notes']];custArr().forEach(function(c){rows.push([c.first||'',c.last||'',c.phone||'',c.email||'',c.addr||'',c.notes||'']);});fn='sawshop-customers-'+today()+'.csv';}
   else if(type==='equipment'){rows=[['Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Date','Record Type','Warranty Exp','Warranty Notes','Notes']];custArr().forEach(function(c){custEquip(c.id).forEach(function(e){rows.push([(c.first||'')+' '+(c.last||''),c.phone||'',e.type||'',e.brand||'',e.year||'',e.model||'',e.serial||'',e.engine||'',e.date||'',e.rectype||'sale',e.warrantyExp||'',e.warrantyNotes||'',e.notes||'']);});});fn='sawshop-equipment-'+today()+'.csv';}
-  else{rows=[['Customer','Phone','Equipment','Type','Detail','Last Service']];buildReminders().forEach(function(r){rows.push([r.custName,r.phone,r.equip,r.type,(r.detail||'').replace(/<[^>]*>/g,'').replace(/&middot;/g,'-'),r.lastSvc||'']);});fn='sawshop-reminders-'+today()+'.csv';}
+  else{rows=[['Customer','Phone','Equipment','Type','Detail','Last Service']];buildReminders().forEach(function(r){rows.push([r.custName,r.phone,r.equip,r.type,(r.detail||'').replace(/<[^>]*>/g,'').replace(/&middot;/g,'-').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&amp;/g,'&'),r.lastSvc||'']);});fn='sawshop-reminders-'+today()+'.csv';}
   var csv='﻿'+rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n');
   dl('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),fn);
 }
@@ -2815,7 +2841,6 @@ function exportJSON(){
 function dl(href,name){var a=document.createElement('a');a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove();}
 function saveFB(){var raw=document.getElementById('fb-cfg').value.trim();if(!raw)return;dangerConfirm('Change database connection?','This points THIS device at a different Firebase database. A wrong config will make the app stop showing shop data on this device until it is cleared.\n\nOnly do this if Mike asked you to.','Yes, change it',function(){saveFBNow(raw);});}
 function saveFBNow(raw){try{var cl=raw.replace(/(\w+)\s*:/g,'"$1":').replace(/'/g,'"');if(cl.indexOf('{')!==0)cl=cl.substring(cl.indexOf('{'));JSON.parse(cl);}catch(e){document.getElementById('fb-msg').textContent='Could not parse config.';return;}localStorage.setItem('fb_config_raw',raw);document.getElementById('fb-msg').style.color='#1a5c0a';document.getElementById('fb-msg').textContent='Saved — reload to connect.';}
-function clearFB(){localStorage.removeItem('fb_config_raw');document.getElementById('fb-cfg').value='';document.getElementById('fb-msg').textContent='Cleared.';}
 function clearFBAndReload(){dangerConfirm('Reset database connection?','Clear any saved database config on this device and reload the app?','Yes, clear and reload',function(){localStorage.removeItem('fb_config_raw');location.reload();});}
 function closeM(id){document.getElementById(id).classList.remove('open');}
 function custSearch(){
@@ -2835,7 +2860,7 @@ function custSearch(){
   matches.forEach(function(c){
     var div=document.createElement('div');
     div.style.cssText='padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--off)';
-    div.innerHTML='<strong>'+c.first+' '+c.last+'</strong>'+(c.phone?' <span style="color:var(--muted);font-size:12px">'+c.phone+'</span>':'');
+    div.innerHTML='<strong>'+escHtml(c.first)+' '+escHtml(c.last)+'</strong>'+(c.phone?' <span style="color:var(--muted);font-size:12px">'+escHtml(c.phone)+'</span>':'');
     div.onmouseover=function(){this.style.background='var(--off)';};
     div.onmouseout=function(){this.style.background='';};
     div.onclick=function(){custSelect(c.id);};
@@ -2887,9 +2912,9 @@ function renderRepeatIntel(custId){
   var d=computeRepeatIntel(custId);
   el.style.display='block';
   if(d.total===0){el.innerHTML='<div style="font-size:12px;color:var(--muted);background:var(--off);border-radius:4px;padding:7px 10px">First-time customer &mdash; no prior work orders on file.</div>';return;}
-  var repeatHtml=d.repeats.length?('<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px">'+d.repeats.map(function(r){return '<span style="background:#FAEEDA;border:1px solid #EF9F27;color:#8a5a00;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">&#128260; '+r.name+' &times;'+r.count+'</span>';}).join('')+'</div>'):'';
+  var repeatHtml=d.repeats.length?('<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px">'+d.repeats.map(function(r){return '<span style="background:#FAEEDA;border:1px solid #EF9F27;color:#8a5a00;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">&#128260; '+escHtml(r.name)+' &times;'+r.count+'</span>';}).join('')+'</div>'):'';
   var lastLine='';
-  if(d.last){var le=[d.last.brand,d.last.equipType].filter(Boolean).join(' ');lastLine='<div style="font-size:11px;color:var(--muted);margin-top:4px">Last visit: '+(d.last.dateIn||'&mdash;')+(le?' &middot; '+le:'')+(d.last.complaint?' &middot; &ldquo;'+d.last.complaint.slice(0,40)+'&rdquo;':'')+'</div>';}
+  if(d.last){var le=[escHtml(d.last.brand),escHtml(d.last.equipType)].filter(Boolean).join(' ');lastLine='<div style="font-size:11px;color:var(--muted);margin-top:4px">Last visit: '+(d.last.dateIn||'&mdash;')+(le?' &middot; '+le:'')+(d.last.complaint?' &middot; &ldquo;'+escHtml(d.last.complaint.slice(0,40))+'&rdquo;':'')+'</div>';}
   var headColor=d.total>=3?'#8a5a00':'var(--gray2)';
   el.innerHTML='<div style="background:var(--off);border:1.5px solid var(--silver);border-radius:4px;padding:8px 10px">'
     +'<div style="font-size:13px;font-weight:700;color:'+headColor+'">&#128260; '+d.total+' prior work order'+(d.total!==1?'s':'')+(d.last12?' &middot; '+d.last12+' in the last year':'')+'</div>'
@@ -3008,10 +3033,10 @@ function partHistoryHtml(id){
   if(!normKey(o.model))return '<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">Add a model number (Edit) to search parts diagrams and see parts used on this model before.</div>';
   var list=modelPartHistory(o).slice(0,12);_histCache[id]=list;
   var name=[o.brand,o.model].filter(Boolean).join(' ');
-  if(!list.length)return '<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">No part numbers recorded on a '+name+' yet. They will show up here as techs enter part numbers on jobs for this model.</div>';
-  return '<div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Parts used on a '+name+' before &mdash; tap to fill the Add Part box</div>'
+  if(!list.length)return '<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">No part numbers recorded on a '+escHtml(name)+' yet. They will show up here as techs enter part numbers on jobs for this model.</div>';
+  return '<div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Parts used on a '+escHtml(name)+' before &mdash; tap to fill the Add Part box</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">'
-    +list.map(function(h,i){return '<button type="button" class="hist-chip" onclick="useHistPart(\''+id+'\','+i+')"><b>'+h.pn+'</b> '+(h.desc||'')+(h.count>1?' <span style="color:var(--muted)">&times;'+h.count+'</span>':'')+'</button>';}).join('')
+    +list.map(function(h,i){return '<button type="button" class="hist-chip" onclick="useHistPart(\''+id+'\','+i+')"><b>'+escHtml(h.pn)+'</b> '+escHtml(h.desc||'')+(h.count>1?' <span style="color:var(--muted)">&times;'+h.count+'</span>':'')+'</button>';}).join('')
     +'</div>';
 }
 function useHistPart(id,i){
@@ -3137,10 +3162,10 @@ function poStatusText(p,cat){
   if(p.received)return '<span style="color:#2d7d1e;font-weight:700">Received '+(p.receivedOn||'')+'</span>';
   var v=cat==='stihl'?'Stihl':(p.vendor||'');
   if(p.batchId||p.ordered){
-    return '<span style="color:var(--gray2)">Ordered'+(v?' from '+v:'')+(p.batchOrderedAt?' '+p.batchOrderedAt:'')+'</span>'
+    return '<span style="color:var(--gray2)">Ordered'+(v?' from '+escHtml(v):'')+(p.batchOrderedAt?' '+p.batchOrderedAt:'')+'</span>'
       +(p.eta?(partEtaLate(p)?' &middot; <span style="color:#fff;background:var(--red);padding:1px 5px;border-radius:2px;font-weight:700">LATE &mdash; was due '+fmtShortDate(p.eta)+'</span>':' &middot; <strong>Due '+fmtShortDate(p.eta)+'</strong>'):'');
   }
-  return '<span style="color:#BA7517;font-weight:700">Not ordered yet'+(v?' ('+v+')':' &mdash; needs a vendor')+'</span>';
+  return '<span style="color:#BA7517;font-weight:700">Not ordered yet'+(v?' ('+escHtml(v)+')':' &mdash; needs a vendor')+'</span>';
 }
 // Latest ETA among a job's parts that have not arrived yet (for the Waiting on Parts list).
 function woPartsEta(woid){
@@ -3534,7 +3559,7 @@ function downloadPartsOrderList(v,batchId,items){
 }
 function printPartsOrderList(v,batchId,items){
   if(!items||!items.length){alert('Nothing to list yet.');return;}
-  var rows=items.map(function(p){return '<tr><td style="padding:6px 8px;border:1px solid #999;font-family:monospace">'+(p.pn||'')+'</td><td style="padding:6px 8px;border:1px solid #999">'+(p.desc||'')+'</td><td style="padding:6px 8px;border:1px solid #999;text-align:center">'+(p.qty||'')+'</td><td style="padding:6px 8px;border:1px solid #999">'+(p.woNum?'WO #'+p.woNum:'')+'</td></tr>';}).join('');
+  var rows=items.map(function(p){return '<tr><td style="padding:6px 8px;border:1px solid #999;font-family:monospace">'+escHtml(p.pn||'')+'</td><td style="padding:6px 8px;border:1px solid #999">'+escHtml(p.desc||'')+'</td><td style="padding:6px 8px;border:1px solid #999;text-align:center">'+(p.qty||'')+'</td><td style="padding:6px 8px;border:1px solid #999">'+(p.woNum?'WO #'+p.woNum:'')+'</td></tr>';}).join('');
   var html='<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:22px;color:#1a1a1a">'
     +'<div style="font-weight:700;font-size:18px">MILLER HARDWARE COMPANY, INC.</div>'
     +'<div style="font-weight:700;font-size:14px;margin-top:14px">PARTS ORDER LIST</div>'
@@ -3578,7 +3603,7 @@ function renderPartHistory(){
     var expanded=!!_poHistoryExpanded[x.id];
     var row=document.createElement('div');
     row.style.cssText='padding:7px 10px;border-bottom:1px solid var(--off);cursor:pointer;font-size:12px;display:flex;justify-content:space-between;align-items:center;background:var(--white)';
-    row.innerHTML='<span>'+(x.b.vendor||'(unassigned)')+' — Ordered '+(x.b.batchOrderedAt||'')+' <span style="color:var(--muted)">('+x.b.items.length+' item'+(x.b.items.length!==1?'s':'')+')</span></span><span style="color:var(--muted)">'+(expanded?'▾':'▸')+'</span>';
+    row.innerHTML='<span>'+escHtml(x.b.vendor||'(unassigned)')+' — Ordered '+(x.b.batchOrderedAt||'')+' <span style="color:var(--muted)">('+x.b.items.length+' item'+(x.b.items.length!==1?'s':'')+')</span></span><span style="color:var(--muted)">'+(expanded?'▾':'▸')+'</span>';
     row.onclick=function(){_poHistoryExpanded[x.id]=!expanded;renderPartHistory();};
     list.appendChild(row);
     if(expanded){
@@ -3602,9 +3627,9 @@ function buildPORow(cat,i,p){
       row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--off)';
       if(p.received)row.style.opacity='0.65';
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
-      info.innerHTML='<div style="font-size:13px;font-weight:600">'+(p.special?'<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--red);padding:2px 6px;border-radius:3px;margin-right:6px">Special Order</span>':'')+(p.pn?'<span style="font-family:monospace;color:var(--gray2);font-weight:700">'+p.pn+'</span> &nbsp;':'')+p.desc+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
-        +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+p.equip+'</div>':'')
-        +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+p.notes+'</div>':'')
+      info.innerHTML='<div style="font-size:13px;font-weight:600">'+(p.special?'<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--red);padding:2px 6px;border-radius:3px;margin-right:6px">Special Order</span>':'')+(p.pn?'<span style="font-family:monospace;color:var(--gray2);font-weight:700">'+escHtml(p.pn)+'</span> &nbsp;':'')+escHtml(p.desc)+(p.qty>1?' <span style="color:var(--muted)">×'+p.qty+'</span>':'')+'</div>'
+        +(p.equip?'<div style="font-size:11px;color:var(--muted)">'+escHtml(p.equip)+'</div>':'')
+        +(p.notes?'<div style="font-size:11px;color:var(--muted)">'+escHtml(p.notes)+'</div>':'')
         +(p.addedBy?'<div style="font-size:11px;color:var(--muted)">Added by '+p.addedBy+'</div>':'')
         +(p.received&&p.receivedOn?'<div style="font-size:11px;color:#2d7d1e;font-weight:600">Received '+p.receivedOn+'</div>':'');
       if(p.woNum){
@@ -3713,10 +3738,10 @@ function renderDaily(){
       ?'<div style="font-size:11px;color:var(--muted)">Last contact: '+lastLog.dt+' &middot; '+lastLog.type+'</div>'
       :'<div style="font-size:11px;color:var(--red);font-weight:600">No contact logged</div>';
     info.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-      +'<span style="font-weight:700;font-size:15px">'+(c.first||'')+' '+(c.last||'')+'</span>'
-      +(c.phone?'<a href="tel:'+c.phone+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:14px;text-decoration:none">📞 '+c.phone+'</a>':'')
+      +'<span style="font-weight:700;font-size:15px">'+escHtml(c.first||'')+' '+escHtml(c.last||'')+'</span>'
+      +(c.phone?'<a href="tel:'+escHtml(c.phone)+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:14px;text-decoration:none">📞 '+escHtml(c.phone)+'</a>':'')
       +'</div>'
-      +'<div style="font-size:12px;color:var(--gray2);margin-top:3px">#'+o.woNum+' &middot; '+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
+      +'<div style="font-size:12px;color:var(--gray2);margin-top:3px">#'+o.woNum+' &middot; '+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')+(o.model?' — '+escHtml(o.model):'')+'</div>'
       +(o.dateIn?'<div style="font-size:11px;color:var(--muted)">In: '+o.dateIn+'</div>':'')
       +lastContactLine;
     if(c.phone){
@@ -3743,9 +3768,9 @@ function renderDaily(){
     var p=item.p;var wo=p.woId&&ORDERS[p.woId]?ORDERS[p.woId]:null;var c=wo&&CUSTS[wo.custId]?CUSTS[wo.custId]:{};
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off)';
-    row.innerHTML='<strong>'+p.desc+'</strong>'+(p.qty>1?' ×'+p.qty:'')
-      +(p.vendor?'<span style="font-size:11px;color:var(--muted);margin-left:6px">from '+p.vendor+'</span>':'')
-      +(wo?'<span style="font-size:12px;color:var(--muted);margin-left:8px">→ WO #'+wo.woNum+' '+(c.first||'')+' '+(c.last||'')+'</span>':'')
+    row.innerHTML='<strong>'+escHtml(p.desc)+'</strong>'+(p.qty>1?' ×'+p.qty:'')
+      +(p.vendor?'<span style="font-size:11px;color:var(--muted);margin-left:6px">from '+escHtml(p.vendor)+'</span>':'')
+      +(wo?'<span style="font-size:12px;color:var(--muted);margin-left:8px">→ WO #'+wo.woNum+' '+escHtml(c.first||'')+' '+escHtml(c.last||'')+'</span>':'')
       +(p.paid?'<span class="b-paid" style="margin-left:6px">Paid</span>':'<span style="font-size:11px;color:var(--red);margin-left:6px;font-weight:600">$ Unpaid</span>');
     if(wo){row.style.cursor='pointer';row.onclick=function(){openDet(wo.id);};}
     return row;
@@ -3757,7 +3782,7 @@ function renderDaily(){
     var days=Math.floor((now-new Date(o.estDate))/(1000*60*60*24));
     var row=document.createElement('div');
     row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--off);cursor:pointer';
-    row.innerHTML='<div><strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')+'<span style="color:var(--red);font-size:11px;margin-left:6px">'+days+'d overdue</span></div>'+badge(o.status||'Intake');
+    row.innerHTML='<div><strong>#'+o.woNum+'</strong> '+escHtml(c.first||'')+' '+escHtml(c.last||'')+' — '+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')+'<span style="color:var(--red);font-size:11px;margin-left:6px">'+days+'d overdue</span></div>'+badge(o.status||'Intake');
     row.onclick=function(){openDet(o.id);};
     return row;
   });
@@ -3768,7 +3793,7 @@ function renderDaily(){
     var days=Math.floor((now-new Date(o.dateIn))/(1000*60*60*24));
     var row=document.createElement('div');
     row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--off);cursor:pointer';
-    row.innerHTML='<div><strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')+'<span style="color:#BA7517;font-size:11px;margin-left:6px">'+days+' days</span></div>'+badge(o.status||'Intake');
+    row.innerHTML='<div><strong>#'+o.woNum+'</strong> '+escHtml(c.first||'')+' '+escHtml(c.last||'')+' — '+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')+'<span style="color:#BA7517;font-size:11px;margin-left:6px">'+days+' days</span></div>'+badge(o.status||'Intake');
     row.onclick=function(){openDet(o.id);};
     return row;
   });
@@ -3781,8 +3806,8 @@ function renderDaily(){
     var e=woPartsEta(o.id),etaHtml='';
     if(e&&e.eta)etaHtml=e.late?'<span style="font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:1px 6px;border-radius:2px;margin-left:6px">LATE &mdash; was due '+fmtShortDate(e.eta)+'</span>':'<span style="font-size:11px;font-weight:700;color:#2d7d1e;margin-left:6px">Due '+fmtShortDate(e.eta)+'</span>';
     else if(e&&e.unknown)etaHtml='<span style="font-size:11px;color:var(--muted);margin-left:6px">no arrival date yet</span>';
-    row.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')+etaHtml
-      +(o.partsWaiting?'<div style="font-size:12px;color:var(--muted)">'+o.partsWaiting+'</div>':'');
+    row.innerHTML='<strong>#'+o.woNum+'</strong> '+escHtml(c.first||'')+' '+escHtml(c.last||'')+' — '+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')+etaHtml
+      +(o.partsWaiting?'<div style="font-size:12px;color:var(--muted)">'+escHtml(o.partsWaiting)+'</div>':'');
     row.onclick=function(){openDet(o.id);};
     return row;
   });
@@ -3793,9 +3818,9 @@ function renderDaily(){
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off);cursor:pointer';
     var d=stageDays(o);
-    row.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')
+    row.innerHTML='<strong>#'+o.woNum+'</strong> '+escHtml(c.first||'')+' '+escHtml(c.last||'')+' — '+escHtml(o.brand||'')+' '+escHtml(o.equipType||'')
       +(d!==null?'<span style="font-size:11px;margin-left:6px;'+(stageLate(o)?'color:var(--red);font-weight:700':'color:var(--muted)')+'">waiting '+(d===0?'since today':d+' day'+(d!==1?'s':''))+'</span>':'')
-      +(c.phone?'<div><a href="tel:'+c.phone+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:13px;text-decoration:none">&#128222; '+c.phone+'</a></div>':'');
+      +(c.phone?'<div><a href="tel:'+escHtml(c.phone)+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:13px;text-decoration:none">&#128222; '+escHtml(c.phone)+'</a></div>':'');
     if(c.phone){
       var tb=document.createElement('button');tb.className='btn sm success';tb.textContent='📱 Text Customer';tb.style.marginTop='4px';
       tb.onclick=function(ev){ev.stopPropagation();textCustomer(o.id);};
@@ -3874,8 +3899,8 @@ function renderTracker(o,c){
   page.innerHTML='<div style="max-width:470px;margin:0 auto;padding:26px 20px 50px;font-family:Barlow,sans-serif;color:#1a1a1a">'
     +'<div style="text-align:center"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:27px;letter-spacing:.02em">MILLER HARDWARE</div><div style="font-size:12px;color:#888;letter-spacing:.1em;text-transform:uppercase">Saw Shop &middot; Repair Status</div></div>'
     +'<div style="background:#fff;border:1.5px solid #e0e0e0;border-radius:10px;padding:22px 20px;margin-top:18px;box-shadow:0 2px 10px rgba(0,0,0,.04)">'
-    +'<div style="font-size:21px;font-weight:800">Hi '+first+'!</div>'
-    +'<div style="font-size:15px;color:#555;margin-top:2px">Here\'s the latest on your <strong>'+equip+'</strong>.</div>'
+    +'<div style="font-size:21px;font-weight:800">Hi '+escHtml(first)+'!</div>'
+    +'<div style="font-size:15px;color:#555;margin-top:2px">Here\'s the latest on your <strong>'+escHtml(equip)+'</strong>.</div>'
     +'<div style="margin-top:20px">'+stepHtml+'</div>'
     +'</div>'
     +midHtml
