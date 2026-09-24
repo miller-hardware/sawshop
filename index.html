@@ -54,6 +54,7 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 .view{display:none;padding:14px}
 .view.active{display:block}
 .stat-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:14px}
+#tab-board .stat-row{grid-template-columns:repeat(7,minmax(0,1fr))}
 .stat{background:var(--white);border:1.5px solid var(--silver);border-radius:3px;padding:10px 12px;border-top:3px solid var(--red)}
 .stat .lbl{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:3px}
 .stat .val{font-size:22px;font-weight:800}
@@ -152,6 +153,17 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 .board-card:hover{border-color:var(--red)}
 .board-card.urgent{border-left:3px solid var(--red)}
 .board-card.waiting{border-left:3px solid #BA7517}
+.board-card.custwait{border-left:3px solid #7B4FC0}
+.b-custwait{background:#EEE6F7;color:#4B2A7B;border:1px solid #A98BD6}
+.stage-age{font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;background:var(--off);border:1px solid var(--silver);color:var(--muted);white-space:nowrap}
+.stage-age.late{background:var(--red);color:#fff;border-color:var(--red)}
+.chip-auth{font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;background:#eaf3de;color:#1a5c0a;border:1px solid #9cc68a;white-space:nowrap}
+.chip-quick{font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;background:#FFF4CC;color:#6b5200;border:1px solid #E8C84A;white-space:nowrap}
+.diag-chip{font-size:12px;font-weight:600;padding:5px 10px;border-radius:14px;border:1.5px solid var(--silver);background:var(--white);color:var(--dark);cursor:pointer;font-family:Barlow,sans-serif}
+.diag-chip:hover{border-color:var(--red)}
+.hist-chip{font-size:11px;padding:3px 8px;border-radius:3px;border:1px solid var(--silver);background:var(--white);color:var(--gray2);cursor:pointer;font-family:Barlow,sans-serif;text-align:left}
+.hist-chip:hover{border-color:var(--red)}
+.hist-chip b{font-family:monospace;color:var(--dark)}
 .board-card .bc-wo{font-size:11px;color:var(--muted);font-weight:700}
 .board-card .bc-cust{font-size:15px;font-weight:700;margin:1px 0}
 .board-card .bc-equip{font-size:12px;color:var(--gray2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -194,6 +206,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   /* Hide + New Work Order button in navbar on mobile — use FAB instead */
   .navbar > button.primary{display:none}
   .stat-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  #tab-board .stat-row{grid-template-columns:repeat(4,minmax(0,1fr))}
   .stat{padding:8px 10px}
   .stat .val{font-size:17px}
   .stat .lbl{font-size:10px}
@@ -343,11 +356,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="stat-row" style="margin-bottom:10px">
       <div class="stat"><div class="lbl">Open Orders</div><div class="val" id="b-open">0</div></div>
       <div class="stat"><div class="lbl">Priority</div><div class="val" id="b-urg" style="color:var(--red)">0</div></div>
+      <div class="stat"><div class="lbl">Waiting on Customer</div><div class="val" id="b-cust" style="color:#7B4FC0">0</div></div>
       <div class="stat"><div class="lbl">Waiting on Parts</div><div class="val" id="b-parts" style="color:#BA7517">0</div></div>
+      <div class="stat"><div class="lbl">Stuck (red)</div><div class="val" id="b-late" style="color:var(--red)">0</div></div>
       <div class="stat"><div class="lbl">Ready for Pickup</div><div class="val" id="b-ready" style="color:#2d7d1e">0</div></div>
       <div class="stat"><div class="lbl">Completed</div><div class="val" id="b-done">0</div></div>
     </div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs.</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs. The day tag on each job shows how long it has sat in its current stage &mdash; it turns <strong style="color:var(--red)">red</strong> when it has been there too long. &#9889; = quick job, do first.</div>
     <div class="board-wrap"><div class="board" id="board-inner"></div></div>
   </div>
 
@@ -356,7 +371,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <input type="text" id="wo-q" placeholder="Search customer, brand, model, serial, WO#..." oninput="renderOrders()">
       <select id="wo-f" onchange="renderOrders()" style="min-width:160px">
         <option value="">All Statuses</option>
-        <option>Intake</option><option>Diagnosing</option><option>In Repair</option>
+        <option>Intake</option><option>Diagnosing</option><option>Waiting on Customer</option><option>In Repair</option>
         <option>Waiting on Parts</option><option>Ready</option><option>Picked Up</option>
       </select>
       <select id="wo-tf" onchange="renderOrders()" style="min-width:120px"><option value="">All Techs</option></select>
@@ -490,6 +505,16 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
     <div class="card">
+      <div class="card-hdr">&#9201; Days Allowed in Each Stage</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:10px">How many days a job can sit in a status before its day tag turns <strong style="color:var(--red)">red</strong> on Shop Load and counts as &ldquo;Stuck.&rdquo; Same numbers for both stores.</div>
+      <div id="stage-limits-box" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px 28px;margin-bottom:10px;max-width:860px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn sm primary" onclick="saveStageLimits()">Save</button>
+        <button class="btn sm" onclick="resetStageLimits()">Reset to defaults</button>
+        <span id="stage-limits-msg" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-hdr">Customer &ldquo;Track My Repair&rdquo; Link</div>
       <div style="font-size:13px;color:var(--gray2);margin-bottom:10px">When ON, text messages to customers include a private link to a live status page for their repair (first name, equipment, and status only &mdash; no phone or address). Turn OFF to stop sharing status links.</div>
       <label style="display:flex;align-items:center;gap:9px;font-size:15px;font-weight:600;cursor:pointer">
@@ -508,6 +533,14 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-hdr">&#129529; Stale Open Orders</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Jobs still marked open that were probably picked up long ago but never closed out. They make the Shop Load board look busier than it is and throw off the promise-date suggestion. Check the ones that are really gone and tap <strong>Mark Picked Up</strong>. Nothing is deleted.</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:13px">
+        Show open jobs taken in more than <input type="number" id="stale-days" value="60" min="7" style="width:70px;padding:4px 6px" oninput="renderStaleOrders()"> days ago
+      </div>
+      <div id="stale-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
+    </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div class="card-hdr" style="margin-bottom:0">&#128202; This Week&rsquo;s Snapshot</div>
@@ -583,6 +616,9 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px">
     <input type="checkbox" id="m-urg" style="width:15px;height:15px;accent-color:var(--red)"> Mark as Priority / Urgent
   </label>
+  <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin:-6px 0 12px">
+    <input type="checkbox" id="m-quick" style="width:15px;height:15px;accent-color:var(--red)"> &#9889; Quick job &mdash; about 30 min or less (plug, filter, pull cord, sharpen). Moves to the top of the tech&rsquo;s list.
+  </label>
   <div class="g3" style="margin-bottom:0">
     <div class="f"><label>Location</label>
       <select id="m-location">
@@ -620,6 +656,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div><!-- /LEFT column -->
   <div class="wo-col"><!-- RIGHT column -->
   <div class="sect-lbl" style="margin-top:0">Work Details</div>
+  <div class="f"><label>Customer Approved Repairs Up To $</label><input type="number" id="m-auth" min="0" step="5" inputmode="numeric" placeholder="Ask at drop-off. Blank = call before repairing"><div style="font-size:11px;color:var(--muted);margin-top:3px">Ask the customer: &ldquo;Can we go ahead with repairs up to $___ without calling you?&rdquo;</div></div>
   <div class="f"><label>Customer Complaint</label><textarea id="m-complaint" placeholder="What is the customer reporting?"></textarea></div>
   <div class="f">
     <label>Tech Notes / Diagnosis</label>
@@ -640,7 +677,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <div class="g3">
     <div class="f"><label>Status</label>
       <select id="m-status" onchange="toggleWaitingRow()">
-        <option>Intake</option><option>Diagnosing</option><option>In Repair</option>
+        <option>Intake</option><option>Diagnosing</option><option>Waiting on Customer</option><option>In Repair</option>
         <option>Waiting on Parts</option><option>Ready</option><option>Picked Up</option>
       </select>
     </div>
@@ -928,11 +965,64 @@ var editWOid=null,editCid=null,editEqCid=null,editEqIdx=null,contactLogWOid=null
 var activeRFilter='all';
 var SVC_INTERVALS={chainsaw:12,mower:12,generator:24,trimmer:18,other:18};
 
-function bc(s){return{'Intake':'b-intake','Diagnosing':'b-diag','In Repair':'b-repair','Waiting on Parts':'b-waiting','Ready':'b-ready','Picked Up':'b-complete'}[s]||'b-intake';}
+function bc(s){return{'Intake':'b-intake','Diagnosing':'b-diag','Waiting on Customer':'b-custwait','In Repair':'b-repair','Waiting on Parts':'b-waiting','Ready':'b-ready','Picked Up':'b-complete'}[s]||'b-intake';}
 function badge(s){return '<span class="badge '+bc(s)+'">'+s+'</span>';}
+var STATUS_LIST=['Intake','Diagnosing','Waiting on Customer','In Repair','Waiting on Parts','Ready','Picked Up'];
+// ── Days in current stage: how long a job has sat in its status. Red once past the limit for that stage. ──
+var STAGE_LIMITS={'Intake':1,'Diagnosing':2,'Waiting on Customer':2,'In Repair':3,'Waiting on Parts':7,'Ready':7};
+function dateStrMs(d){if(!d)return null;var t=new Date(d+'T12:00:00').getTime();return isNaN(t)?null:t;}
+function stageSince(o){
+  if(o.statusTs)return o.statusTs;
+  // Older jobs never recorded when their status changed, so estimate from the dates we do have.
+  if(o.status==='Ready'&&o.dateOut)return dateStrMs(o.dateOut);
+  return dateStrMs(o.dateIn);
+}
+function stageDays(o){var s=stageSince(o);if(!s)return null;return Math.max(0,Math.floor((Date.now()-s)/86400000));}
+// Shop can override the defaults in Settings (saved in SETTINGS.stageLimits).
+function stageLimit(st){var s=SETTINGS.stageLimits||{};var v=parseInt(s[st]);return isNaN(v)?STAGE_LIMITS[st]:v;}
+function stageLate(o){var d=stageDays(o),lim=stageLimit(o.status||'Intake');return d!==null&&lim!=null&&d>lim;}
+function renderStageLimits(){
+  var box=document.getElementById('stage-limits-box');if(!box)return;
+  box.innerHTML=Object.keys(STAGE_LIMITS).map(function(st,i){
+    return '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;font-weight:600">'+badge(st)
+      +'<span style="white-space:nowrap"><input type="number" id="stage-lim-'+i+'" value="'+stageLimit(st)+'" min="0" max="90" style="width:55px;padding:4px 8px;border:1.5px solid var(--silver);border-radius:3px;font-size:13px;margin-right:4px">days</span></label>';
+  }).join('');
+}
+function saveStageLimits(){
+  var lim={},bad=false;
+  Object.keys(STAGE_LIMITS).forEach(function(st,i){var v=parseInt((document.getElementById('stage-lim-'+i)||{}).value);if(isNaN(v)||v<0)bad=true;else lim[st]=v;});
+  if(bad){alert('Enter a number of days (0 or more) for every stage.');return;}
+  writeStageLimits(lim);
+}
+function resetStageLimits(){
+  if(!confirm('Put all stages back to the default days?'))return;
+  writeStageLimits(JSON.parse(JSON.stringify(STAGE_LIMITS)));
+}
+function writeStageLimits(lim){
+  var msg=document.getElementById('stage-limits-msg');
+  var prev=SETTINGS.stageLimits;
+  SETTINGS.stageLimits=lim;
+  function done(){renderStageLimits();renderBoard();renderOrders();if(msg){msg.style.color='#2d7d1e';msg.textContent='Saved.';setTimeout(function(){msg.textContent='';},2500);}}
+  if(DB){
+    DB.ref('settings/stageLimits').set(lim,function(err){
+      if(err){SETTINGS.stageLimits=prev;renderStageLimits();if(msg){msg.style.color='var(--red)';msg.textContent='Could not save: your account does not have permission to change shop settings. Ask Mike.';}return;}
+      done();
+    });
+  }else{saveLocal();done();}
+}
+function stageAgeChip(o){
+  if(o.status==='Picked Up')return '';
+  var d=stageDays(o);if(d===null)return '';
+  var st=o.status||'Intake',lim=stageLimit(st);
+  var tip='In '+st+' '+(d===0?'since today':'for '+d+' day'+(d!==1?'s':''))+(lim!=null?' (limit '+lim+')':'')+(o.statusTs?'':' - estimated from date in');
+  return '<span class="stage-age'+(stageLate(o)?' late':'')+'" title="'+tip+'">'+(d===0?'Today':d+'d')+' in stage</span>';
+}
+function authChip(o){var a=parseFloat(o.authAmt);return a>0?'<span class="chip-auth" title="Customer approved repairs up to $'+a+' without a call">OK $'+a+'</span>':'';}
+function quickChip(o){return o.quick?'<span class="chip-quick" title="Quick job - do first">&#9889; Quick</span>':'';}
+function setStatus(o,s){if(o.status!==s){o.status=s;o.statusTs=Date.now();}}
 function setSP(st,t){var p=document.getElementById('sync-pill');p.className='sync-pill '+st;p.querySelector('.dot').className='dot '+(st==='ok'?'g':st==='err'?'r':'a');document.getElementById('sync-txt').textContent=t;}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
-function today(){return new Date().toISOString().slice(0,10);}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
 function warrantyStatus(expDate){if(!expDate)return null;var exp=new Date(expDate),now=new Date(),diff=Math.round((exp-now)/(1000*60*60*24));if(diff<0)return{label:'Warranty expired',cls:'b-warranty-exp'};if(diff<=30)return{label:'Expires in '+diff+'d',cls:'b-warranty-soon'};return{label:'Under warranty',cls:'b-warranty'};}
 
@@ -1186,14 +1276,19 @@ function doLogout(){if(AUTH){AUTH.signOut();location.reload();}}
 // ── Roles: master (admin) vs shop staff. Admin = one of these emails; everyone else who signs in = staff. ──
 var ADMIN_EMAILS=['mike_millerhardware@outlook.com','jake@millersawshop.local','michael@millersawshop.local'];
 function isAdmin(){return !!(CURRENT_USER&&CURRENT_USER.email&&ADMIN_EMAILS.indexOf(CURRENT_USER.email.toLowerCase())>=0);}
+// FOR NOW everyone signed in can use every setting and delete (Mike, 2026-09-23). Deletes still get the big red warning box.
+// Set to false to go back to owner-only deletes/settings.
+var ALL_STAFF_FULL_ACCESS=true;
+function canManage(){return ALL_STAFF_FULL_ACCESS||isAdmin();}
 function applyRole(){
-  var admin=isAdmin();
+  var admin=canManage();
   document.querySelectorAll('.admin-only').forEach(function(el){el.style.display=admin?'':'none';});
   var au=document.getElementById('admin-unlocked');
   if(au)au.style.display=admin?'block':'none';
   renderTechs();renderVendors();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();
   var rl=document.getElementById('account-role');
-  if(rl){rl.textContent=admin?'OWNER':'STAFF';rl.style.color=admin?'var(--red)':'var(--gray2)';}
+  var owner=isAdmin();
+  if(rl){rl.textContent=owner?'OWNER':'STAFF';rl.style.color=owner?'var(--red)':'var(--gray2)';}
 }
 function boot(){refreshAll();renderTechs();renderVendors();populateTechSels();renderReminders();loadIntervalInputs();renderPartOrders();loadAgeInputs();loadDeviceLocation();syncBoardLoc();}
 // Location for new work orders. Priority: this-device override (if set) -> your account's home store (MY_STORE) -> Yellville.
@@ -1238,12 +1333,12 @@ function writeContactLogs(woid,logs){if(DB){DB.ref('contactlogs/'+woid).set(logs
 function writePartOrders(){if(DB){DB.ref('partorders').set(PARTORDERS);}else{saveLocal();}}
 
 function addTech(){var n=document.getElementById('new-tech').value.trim();if(!n||TECHS.indexOf(n)>=0)return;TECHS.push(n);writeTechs();renderTechs();populateTechSels();document.getElementById('new-tech').value='';}
-function removeTech(n){if(!confirm('Remove tech '+n+'?'))return;TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();}
+function removeTech(n){dangerConfirm('Remove technician?','Remove '+n+' from the technician list?\n\nTheir open jobs will show under Unassigned on Shop Load.','Yes, remove',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();renderBoard();});}
 function renderTechs(){var el=document.getElementById('tech-chips');if(!el)return;el.innerHTML=TECHS.map(function(t){return '<span class="tech-chip">'+t+'<button onclick="removeTech(\''+t+'\')">&#x2715;</button></span>';}).join('');}
 
 function writeVendors(){if(DB){DB.ref('vendors').set(VENDORS);}else{saveLocal();}}
 function addVendor(){var n=document.getElementById('new-vendor').value.trim();if(!n||VENDORS.indexOf(n)>=0)return;VENDORS.push(n);writeVendors();renderVendors();renderPartOrders();document.getElementById('new-vendor').value='';}
-function removeVendor(n){if(!confirm('Remove vendor '+n+'?'))return;VENDORS=VENDORS.filter(function(v){return v!==n;});writeVendors();renderVendors();renderPartOrders();}
+function removeVendor(n){dangerConfirm('Remove vendor?','Remove '+n+' from the vendor list?','Yes, remove',function(){VENDORS=VENDORS.filter(function(v){return v!==n;});writeVendors();renderVendors();renderPartOrders();});}
 function renderVendors(){var el=document.getElementById('vendor-chips');if(!el)return;if(!VENDORS.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">No vendors yet — add your suppliers below.</div>';return;}el.innerHTML='';VENDORS.forEach(function(v){var chip=document.createElement('span');chip.className='tech-chip';chip.appendChild(document.createTextNode(v));var btn=document.createElement('button');btn.innerHTML='&#x2715;';btn.onclick=function(){removeVendor(v);};chip.appendChild(btn);el.appendChild(chip);});}
 function populateTechSels(){['m-tech','wo-tf'].forEach(function(id){var sel=document.getElementById(id);if(!sel)return;var cur=sel.value;sel.innerHTML=id==='m-tech'?'<option>Unassigned</option>':'<option value="">All Techs</option>';TECHS.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);});if(cur)sel.value=cur;});}
 function vendorOptionListHTML(){
@@ -1319,6 +1414,49 @@ function weeklySnapshotHTML(forPrint){
     :('<div style="font-size:11px;color:var(--muted);margin-bottom:6px">'+title+'</div>'+rowHtml);
 }
 function renderWeeklySnapshot(){var el=document.getElementById('weekly-snapshot');if(el)el.innerHTML=weeklySnapshotHTML(false);}
+// ── Stale open orders: close out jobs that were picked up but never marked (updates only, nothing deleted) ──
+function staleOrderList(){
+  var days=parseInt((document.getElementById('stale-days')||{}).value)||60;
+  var cut=Date.now()-days*86400000;
+  return orderArr().filter(function(o){
+    if(o.status==='Picked Up')return false;
+    var t=dateStrMs(o.dateIn);return t!==null&&t<cut;
+  }).sort(function(a,b){return (a.dateIn||'').localeCompare(b.dateIn||'');});
+}
+function renderStaleOrders(){
+  var el=document.getElementById('stale-box');if(!el)return;
+  var list=staleOrderList();
+  if(!list.length){el.innerHTML='<div class="empty" style="padding:6px 0">No open jobs that old. &#10003;</div>';return;}
+  el.innerHTML='';
+  var top=document.createElement('div');top.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12px';
+  var all=document.createElement('label');all.style.cssText='display:flex;align-items:center;gap:5px;cursor:pointer';
+  var allCk=document.createElement('input');allCk.type='checkbox';allCk.style.cssText='width:15px;height:15px;accent-color:var(--red)';
+  all.appendChild(allCk);all.appendChild(document.createTextNode('Select all ('+list.length+')'));
+  var btn=document.createElement('button');btn.className='btn sm primary';btn.textContent='Mark Picked Up';
+  top.appendChild(all);top.appendChild(btn);el.appendChild(top);
+  var box=document.createElement('div');box.style.cssText='max-height:340px;overflow:auto;border:1px solid var(--silver);border-radius:3px';
+  list.forEach(function(o){
+    var c=CUSTS[o.custId]||{};
+    var row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--off);font-size:12px;cursor:pointer';
+    var ck=document.createElement('input');ck.type='checkbox';ck.className='stale-ck';ck.value=o.id;ck.style.cssText='width:15px;height:15px;accent-color:var(--red);flex-shrink:0';
+    var info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
+    var d=Math.floor((Date.now()-dateStrMs(o.dateIn))/86400000);
+    info.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' &mdash; '+(o.brand||'')+' '+(o.equipType||'')+' <span style="color:var(--muted)">&middot; in '+o.dateIn+' ('+d+' days) &middot; '+(o.location||'Yellville')+'</span>';
+    var view=document.createElement('button');view.className='btn sm';view.textContent='View';view.style.flexShrink='0';
+    view.onclick=function(e){e.preventDefault();e.stopPropagation();openDet(o.id);};
+    row.appendChild(ck);row.appendChild(info);row.insertAdjacentHTML('beforeend',badge(o.status||'Intake'));row.appendChild(view);
+    box.appendChild(row);
+  });
+  el.appendChild(box);
+  allCk.onchange=function(){box.querySelectorAll('.stale-ck').forEach(function(c){c.checked=allCk.checked;});};
+  btn.onclick=function(){
+    var ids=[];box.querySelectorAll('.stale-ck:checked').forEach(function(c){ids.push(c.value);});
+    if(!ids.length){alert('Check the jobs to close out first.');return;}
+    if(!confirm('Mark '+ids.length+' job'+(ids.length!==1?'s':'')+' as Picked Up?\n\nNothing is deleted. They move to the Work Order Archive.'))return;
+    ids.forEach(function(id){var o=ORDERS[id];if(!o)return;setStatus(o,'Picked Up');o.partsWaiting='';o.staleClosed=today();writeOrder(o);});
+    setTimeout(renderStaleOrders,400);
+  };
+}
 function printWeeklySnapshot(){var pa=document.getElementById('print-area');pa.innerHTML=weeklySnapshotHTML(true);pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 // ── One-time catch-up: log equipment from existing work order history (owner-only, preview-then-apply) ──
 function computeEquipmentBackfillPreview(){
@@ -1365,7 +1503,7 @@ function applyEquipmentBackfill(){
   if(!results.length)return;
   var custSet={};results.forEach(function(r){custSet[r.custId]=1;});
   var custCount=Object.keys(custSet).length;
-  if(!confirm('Create '+results.length+' equipment record'+(results.length!==1?'s':'')+' across '+custCount+' customer'+(custCount!==1?'s':'')+', based on work order history?\n\nEach logs as "Serviced by Miller Hardware" — you can edit any record afterward.\n\nThis cannot be undone.'))return;
+  dangerConfirm('Log equipment from history?','Create '+results.length+' equipment record'+(results.length!==1?'s':'')+' across '+custCount+' customer'+(custCount!==1?'s':'')+', based on work order history?\n\nEach logs as "Serviced by Miller Hardware". You can edit any record afterward.','Yes, create them',function(){
   var byCust={};
   results.forEach(function(r){(byCust[r.custId]=byCust[r.custId]||[]).push(r.eq);});
   var updates={};
@@ -1374,6 +1512,7 @@ function applyEquipmentBackfill(){
     alert('Created '+results.length+' equipment record'+(results.length!==1?'s':'')+'.');
     renderEquipmentBackfill();
   }).catch(function(e){alert('Update failed: '+e.message);});
+  });
 }
 // ── One-time cleanup pass: fix known brand-name misspellings/casing on orders + equipment (owner-only, preview-then-apply) ──
 var BRAND_FIXES={
@@ -1429,7 +1568,7 @@ function renderBrandCleanup(){
 function applyBrandCleanup(){
   var changes=computeBrandCleanupPreview();
   if(!changes.length)return;
-  if(!confirm('Fix '+changes.length+' brand name'+(changes.length!==1?'s':'')+' (misspellings/casing only — e.g. "Sthil" → "Stihl")?\n\nThis cannot be undone.'))return;
+  dangerConfirm('Fix brand names?','Fix '+changes.length+' brand name'+(changes.length!==1?'s':'')+' (misspellings/casing only, e.g. "Sthil" → "Stihl")?','Yes, fix them',function(){
   var updates={};
   changes.forEach(function(c){
     if(c.kind==='order'){
@@ -1444,6 +1583,7 @@ function applyBrandCleanup(){
     alert('Fixed '+changes.length+' brand name'+(changes.length!==1?'s':'')+'.');
     renderBrandCleanup();
   }).catch(function(e){alert('Update failed: '+e.message);});
+  });
 }
 // ── One-time cleanup pass: standardize existing customer names + phone numbers (owner-only, preview-then-apply) ──
 function computeCustomerCleanupPreview(){
@@ -1477,7 +1617,7 @@ function renderCustomerCleanup(){
 function applyCustomerCleanup(){
   var changes=computeCustomerCleanupPreview();
   if(!changes.length)return;
-  if(!confirm('Update '+changes.length+' customer record'+(changes.length!==1?'s':'')+' with cleaned-up names/phone numbers?\n\nThis cannot be undone.'))return;
+  dangerConfirm('Clean up customers?','Update '+changes.length+' customer record'+(changes.length!==1?'s':'')+' with cleaned-up names/phone numbers?','Yes, update them',function(){
   var updates={},changeById={};
   changes.forEach(function(c){
     updates['customers/'+c.id+'/first']=c.newFirst;
@@ -1493,6 +1633,7 @@ function applyCustomerCleanup(){
     alert('Updated '+changes.length+' customer record'+(changes.length!==1?'s':'')+'.');
     renderCustomerCleanup();
   }).catch(function(e){alert('Update failed: '+e.message);});
+  });
 }
 function renderDupCustomers(){
   var el=document.getElementById('dup-cust-list');if(!el)return;
@@ -1515,7 +1656,7 @@ function renderDupCustomers(){
 }
 // ── Merge two customer records (owner-only): moves all orders + equipment to the kept record, combines notes/contact info, deletes the other. ──
 function mergeCustomersUI(keepId,loseId){
-  if(!isAdmin()){alert('Only the shop owner can merge customers.');return;}
+  if(!canManage()){alert('Only the shop owner can merge customers.');return;}
   var keep=CUSTS[keepId],lose=CUSTS[loseId];
   if(!keep||!lose){alert('One of these customers could not be found — try reloading.');return;}
   var moving=Object.keys(ORDERS).filter(function(k){return ORDERS[k].custId===loseId;}).length;
@@ -1523,9 +1664,8 @@ function mergeCustomersUI(keepId,loseId){
   var msg='Merge "'+loseName+'" into "'+keepName+'"?\n\n'
     +moving+' work order'+(moving!==1?'s':'')+' will move to "'+keepName+'".\n'
     +'Notes from both will be combined.\n'
-    +'"'+loseName+'" will then be deleted.\n\nThis cannot be undone.';
-  if(!confirm(msg))return;
-  mergeCustomers(keepId,loseId);
+    +'"'+loseName+'" will then be deleted.';
+  dangerConfirm('Merge customers?',msg,'Yes, merge them',function(){mergeCustomers(keepId,loseId);});
 }
 function mergeCustomers(keepId,loseId){
   var keep=CUSTS[keepId],lose=CUSTS[loseId];
@@ -1558,7 +1698,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
-  if(t==='settings'){renderInstallBox();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}
+  if(t==='settings'){renderInstallBox();renderStageLimits();renderStaleOrders();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1574,19 +1714,25 @@ function renderBoard(){
   var st=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
   st('b-open',open.length);
   st('b-urg',open.filter(function(o){return o.urgent;}).length);
+  st('b-cust',open.filter(function(o){return o.status==='Waiting on Customer';}).length);
   st('b-parts',open.filter(function(o){return o.status==='Waiting on Parts';}).length);
+  st('b-late',open.filter(stageLate).length);
   st('b-ready',open.filter(function(o){return o.status==='Ready';}).length);
   st('b-done',done.length);
   var allTechs=['Unassigned'].concat(TECHS);
   el.innerHTML=allTechs.map(function(tech){
-    var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;});
+    // Urgent first, then quick jobs, then everything else in date-in order.
+    var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;})
+      .map(function(o,i){return {o:o,i:i};})
+      .sort(function(a,b){var ra=(a.o.urgent?0:a.o.quick?1:2),rb=(b.o.urgent?0:b.o.quick?1:2);return ra!==rb?ra-rb:a.i-b.i;})
+      .map(function(x){return x.o;});
     var overloaded=jobs.length>=4;
     var cards=jobs.length?jobs.map(function(o){
-      var c=CUSTS[o.custId]||{};var isWaiting=o.status==='Waiting on Parts';
-      return '<div class="board-card'+(o.urgent?' urgent':isWaiting?' waiting':'')+'" onclick="openDet(\''+o.id+'\')">'
+      var c=CUSTS[o.custId]||{};var isWaiting=o.status==='Waiting on Parts',isCust=o.status==='Waiting on Customer';
+      return '<div class="board-card'+(o.urgent?' urgent':isWaiting?' waiting':isCust?' custwait':'')+'" onclick="openDet(\''+o.id+'\')">'
         +'<div class="bc-wo">#'+o.woNum+'</div><div class="bc-cust">'+(c.first||'')+' '+(c.last||'')+'</div>'
         +'<div class="bc-equip">'+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
-        +'<div class="bc-meta">'+badge(o.status||'Intake')+(o.urgent?'<span class="badge b-urgent">!</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
+        +'<div class="bc-meta">'+badge(o.status||'Intake')+stageAgeChip(o)+quickChip(o)+authChip(o)+(o.urgent?'<span class="badge b-urgent">!</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
         +'</div>';
     }).join(''):'<div class="board-empty">No open orders</div>';
     return '<div class="board-col"><div class="board-col-hdr'+(overloaded?' overloaded':'')+'"><span>'+tech+'</span><span class="col-count">'+jobs.length+'</span></div><div class="board-col-body">'+cards+'</div></div>';
@@ -1613,7 +1759,7 @@ function woRow(o,c){
     +'<div class="wo-equip">'+equip+(o.serial?' | SN: '+o.serial:'')+(isWaiting&&o.partsWaiting?' · '+o.partsWaiting:'')+'</div>'
     +(o.dateIn?'<div style="font-size:15px;font-weight:700;color:var(--muted);margin-top:3px">In: '+o.dateIn+(o.estDate?' · Est: '+o.estDate:'')+(o.tech?' · '+o.tech:'')+'</div>':'')
     +'</div>'
-    +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
+    +'<div class="wo-meta">'+(o.urgent?'<span class="badge b-urgent">Urgent</span>':'')+badge(o.status||'Intake')+stageAgeChip(o)+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
     +'</div>';
 }
 
@@ -1681,11 +1827,11 @@ function guideSections(){return [
 ['2. The tabs, at a glance',
  '<ul><li><strong>Shop Load</strong> &mdash; every open job at a glance, grouped by technician. This is what opens first.</li><li><strong>Customers</strong> &mdash; search or add customers and see their history.</li><li><strong>&#128222; Pickup &amp; Report</strong> &mdash; who&rsquo;s ready to be called, and who&rsquo;s been waiting.</li><li><strong>Reminders</strong> &mdash; customers due for seasonal service (a quick text brings in work).</li><li><strong>&#128295; Parts to Order</strong> &mdash; parts you need to order, grouped by vendor.</li><li><strong>Work Order Archive</strong> &mdash; every job, past and present.</li><li><strong>Settings</strong> &mdash; your account, plus vendors and techs you can manage.</li></ul>'],
 ['3. Taking in a repair (your #1 job)',
- '<p>When a customer brings something in:</p><ol><li>Tap <strong>+ New Work Order</strong> (red button, or the <strong>+</strong> on your phone).</li><li><strong>Customer:</strong> search their name or phone. New customer? Tap <strong>+ New</strong> and add them.</li><li><strong>Equipment:</strong> pick the type and fill in brand, model, and <strong>serial #</strong> &mdash; the more detail the better (you&rsquo;ll need the serial for warranty).</li><li><strong>What&rsquo;s wrong:</strong> put it in the <em>Customer Complaint</em> box, in their words (&ldquo;won&rsquo;t start&rdquo;, &ldquo;smokes&rdquo;).</li><li><strong>Hang tag #:</strong> write the same number on a paper tag and hang it on the unit.</li><li><strong>Est. Completion:</strong> the app suggests a date based on how busy the shop is &mdash; tap <strong>Use</strong>, or set your own.</li><li>Tap <strong>Save Work Order</strong>, then <strong>Print Work Order</strong>.</li></ol><p>Hand the customer the top <strong>Counter Copy</strong> (their claim ticket); keep the tech sheet with the unit.</p>'],
+ '<p>When a customer brings something in:</p><ol><li>Tap <strong>+ New Work Order</strong> (red button, or the <strong>+</strong> on your phone).</li><li><strong>Customer:</strong> search their name or phone. New customer? Tap <strong>+ New</strong> and add them.</li><li><strong>Equipment:</strong> pick the type and fill in brand, model, and <strong>serial #</strong> &mdash; the more detail the better (you&rsquo;ll need the serial for warranty).</li><li><strong>What&rsquo;s wrong:</strong> put it in the <em>Customer Complaint</em> box, in their words (&ldquo;won&rsquo;t start&rdquo;, &ldquo;smokes&rdquo;).</li><li><strong>Hang tag #:</strong> write the same number on a paper tag and hang it on the unit.</li><li><strong>Approved up to $:</strong> ask &ldquo;Can we go ahead with repairs up to $___ without calling you?&rdquo; and enter the amount. This is the biggest time saver in the shop &mdash; the tech can fix it without waiting on a phone call. Leave it blank if they want a call first.</li><li><strong>Quick job?</strong> Check <strong>&#9889; Quick job</strong> for anything about 30 minutes or less (plug, filter, pull cord, sharpening) &mdash; it jumps to the top of the tech&rsquo;s list.</li><li><strong>Est. Completion:</strong> the app suggests a date based on how busy the shop is &mdash; tap <strong>Use</strong>, or set your own.</li><li>Tap <strong>Save Work Order</strong>, then <strong>Print Work Order</strong>.</li></ol><p>Hand the customer the top <strong>Counter Copy</strong> (their claim ticket); keep the tech sheet with the unit.</p>'],
 ['4. Working a repair',
- '<p>Tap any job to open it. From there you can:</p><ul><li><strong>Update the status</strong> as you go: Intake &rarr; Diagnosing &rarr; In Repair &rarr; Waiting on Parts &rarr; Ready &rarr; Picked Up. Just tap the status buttons.</li><li><strong>Add parts &amp; labor:</strong> type the part # and description, then tap <strong>+ Add Part</strong>. If it needs to be ordered, check <strong>Needs to be ordered</strong> first &mdash; it will also show up in &#128295; Parts to Order.</li><li><strong>Add notes:</strong> type and tap <strong>+ Add Note</strong>, or tap <strong>&#127908;</strong> and just talk &mdash; great for greasy hands.</li><li><strong>Attach photos:</strong> snap the damage or the serial plate.</li><li><strong>Drop-off signature:</strong> tap <strong>Capture</strong> on &ldquo;Drop-off &mdash; Authorizes Diagnosis&rdquo; and have the customer sign.</li></ul>'],
+ '<p>Tap any job to open it. From there you can:</p><ul><li><strong>Update the status</strong> as you go: Intake &rarr; Diagnosing &rarr; Waiting on Customer &rarr; In Repair &rarr; Waiting on Parts &rarr; Ready &rarr; Picked Up. Just tap the status buttons. Use <strong>Waiting on Customer</strong> when you need their OK before going further &mdash; those jobs show up on Pickup &amp; Report so someone calls them.</li><li><strong>The day tag</strong> (&ldquo;3d in stage&rdquo;) shows how long a job has sat in its current status. It turns <strong>red</strong> when it has been there too long &mdash; red jobs need attention first.</li><li><strong>Quick Diagnosis:</strong> tap what you found (Carburetor, Fuel system, Tune-up&hellip;). It fills in the note and the usual parts, with part numbers filled in from past jobs on the same model. Edit anything, check <strong>Order it</strong> for parts you need to order, then tap <strong>Add to Work Order</strong>.</li><li><strong>Finding part numbers:</strong> tap <strong>&#128270; Parts Diagrams</strong> to open the diagrams for that model, or tap one of the <strong>Parts used on this model before</strong> buttons to fill in the part box.</li><li><strong>Add parts &amp; labor:</strong> type the part # and description, then tap <strong>+ Add Part</strong>. If it needs to be ordered, check <strong>Needs to be ordered</strong> first &mdash; it will also show up in &#128295; Parts to Order.</li><li><strong>Add notes:</strong> type and tap <strong>+ Add Note</strong>, or tap <strong>&#127908;</strong> and just talk &mdash; great for greasy hands.</li><li><strong>Attach photos:</strong> snap the damage or the serial plate.</li><li><strong>Drop-off signature:</strong> tap <strong>Capture</strong> on &ldquo;Drop-off &mdash; Authorizes Diagnosis&rdquo; and have the customer sign.</li></ul>'],
 ['5. Ordering parts',
- '<p>When a part needs ordering it shows up in <strong>&#128295; Parts to Order</strong>, grouped by vendor. Pick the vendor from the dropdown, place the order, and tap <strong>Order &rarr; Received</strong> when it arrives. Need a new vendor? Add one right there or in Settings.</p>'],
+ '<p>When a part needs ordering it shows up in <strong>&#128295; Parts to Order</strong>, grouped by vendor. Pick the vendor from the dropdown, place the order, and tap <strong>Order &rarr; Received</strong> when it arrives. When you close a vendor list, enter the <strong>Expected arrival</strong> date &mdash; it shows on the work order and on Pickup &amp; Report, and turns <strong>LATE</strong> if the parts do not show up on time. Need a new vendor? Add one right there or in Settings.</p>'],
 ['6. Keeping the customer informed',
  '<p>From any job:</p><ul><li><strong>&#128241; Text Customer</strong> &mdash; opens a pre-filled text (ready-for-pickup or a general update).</li><li>The text includes a <strong>Track My Repair</strong> link &mdash; the customer taps it to watch their status any time, no phone calls.</li><li><strong>Log Contact</strong> &mdash; jot down when you called or texted so everyone&rsquo;s on the same page.</li></ul>'],
 ['7. Finishing up (pickup)',
@@ -1696,8 +1842,8 @@ function guideSections(){return [
  '<ul><li><strong>Find a customer fast</strong> &mdash; search by name or phone in the Customers tab.</li><li><strong>Rush job?</strong> Flag it <strong>Urgent</strong> &mdash; it pins to the top.</li><li><strong>Scan the QR</strong> on a tech sheet to jump straight to that job.</li><li><strong>Add this app to your home screen</strong> &mdash; see the next section for exact steps.</li><li>Everything <strong>syncs live</strong> &mdash; what you change, everyone sees instantly.</li></ul>'],
 ['10. Get it on your home screen',
  '<p>Put a Miller Saw Shop icon right on your phone &mdash; it opens full-screen, no browser bar, just like any other app.</p><p><strong>iPhone/iPad (Safari):</strong></p><ol><li>Tap the <strong>Share</strong> icon (square with an up arrow) at the bottom of Safari.</li><li>Scroll down and tap <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong> in the top right. Done.</li></ol><p><strong>Android (Chrome):</strong> tap the <strong>&#8942;</strong> menu, top right, then <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</p><p>Or just open <strong>Settings</strong> in the app &mdash; there&rsquo;s an install box there that walks you through it too, and shows a one-tap button on Android when it&rsquo;s available.</p>'],
-['11. What&rsquo;s owner-only',
- '<p>A few things are set by Mike: <strong>shop settings</strong>, the customer-tracker on/off, and <strong>deleting</strong> jobs. If you need one of those, just ask him. Everything else &mdash; work orders, customers, parts, vendors, and techs &mdash; is yours to run.</p>']
+['11. Deleting things &amp; shop settings',
+ '<p>Everyone can use every setting and delete button right now. Anything that deletes data or cannot be undone pops up a <strong>big red warning box</strong> first. Read it before you tap the red button &mdash; tapping <strong>Cancel</strong>, pressing Enter, or tapping outside the box keeps everything as it was. If you are not sure, ask Mike before deleting.</p>']
 ];}
 function buildGuideHTML(forPrint){
   var intro=forPrint
@@ -1719,7 +1865,7 @@ function openNewWO(){
   document.getElementById('m-location').value=defaultLocation();
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
-  document.getElementById('m-urg').checked=false;document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
+  document.getElementById('m-urg').checked=false;document.getElementById('m-quick').checked=false;document.getElementById('m-auth').value='';document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
   document.getElementById('pt-body').innerHTML='';document.getElementById('waiting-parts-row').style.display='none';
   renderEstSuggest();
   document.getElementById('wo-modal').classList.add('open');
@@ -1736,7 +1882,7 @@ function openEditWO(id){
   document.getElementById('m-notes').value=o.notes||'';document.getElementById('m-notes-ts').textContent=o.notesTs?'Last updated: '+o.notesTs:'';
   document.getElementById('m-status').value=o.status||'Intake';document.getElementById('m-datein').value=o.dateIn||'';
   document.getElementById('m-estdate').value=o.estDate||'';document.getElementById('m-dateout').value=o.dateOut||'';
-  document.getElementById('m-urg').checked=!!o.urgent;document.getElementById('m-deposit').checked=!!o.deposit;document.getElementById('m-paid').checked=!!o.paid;document.getElementById('m-parts-waiting').value=o.partsWaiting||'';
+  document.getElementById('m-urg').checked=!!o.urgent;document.getElementById('m-quick').checked=!!o.quick;document.getElementById('m-auth').value=o.authAmt||'';document.getElementById('m-deposit').checked=!!o.deposit;document.getElementById('m-paid').checked=!!o.paid;document.getElementById('m-parts-waiting').value=o.partsWaiting||'';
   document.getElementById('m-tag').value=o.tag||'';
   document.getElementById('m-ticket').value=o.ticket||'';
   document.getElementById('m-location').value=o.location||'Yellville';
@@ -1744,17 +1890,18 @@ function openEditWO(id){
   var pb=document.getElementById('pt-body');pb.innerHTML='';(o.parts||[]).forEach(function(p){appPR(p);});
   closeM('det-modal');renderEstSuggest();document.getElementById('wo-modal').classList.add('open');
 }
-function quickStatus(id,s){var o=ORDERS[id];if(!o)return;o.status=s;if(s!=='Waiting on Parts')o.partsWaiting='';writeOrder(o);openDet(id);}
+function quickStatus(id,s){var o=ORDERS[id];if(!o)return;setStatus(o,s);if(s!=='Waiting on Parts')o.partsWaiting='';writeOrder(o);openDet(id);}
 
 function addPRow(){appPR({desc:'',qty:1,note:''});}
-function appPR(p){var tr=document.createElement('tr');var si='border:1.5px solid var(--silver);border-radius:3px;padding:4px 6px;font-size:12px;background:var(--white);color:var(--dark);width:100%;font-family:Barlow,sans-serif';tr.innerHTML='<td style="width:40%"><input type="text" value="'+(p.desc||'')+'" placeholder="e.g. Air filter, Labor — rebuild" style="'+si+'"></td><td style="width:12%"><input type="number" value="'+(p.qty||1)+'" min="1" style="'+si+'"></td><td style="display:flex;gap:4px;padding:0"><input type="text" value="'+(p.note||'')+'" placeholder="Optional notes..." style="'+si+';flex:1"><button class="btn sm del" onclick="this.closest(\'tr\').remove()" style="padding:3px 7px;flex-shrink:0">&#x2715;</button></td>';document.getElementById('pt-body').appendChild(tr);}
-function getParts(){var parts=[];document.querySelectorAll('#pt-body tr').forEach(function(r){var ins=r.querySelectorAll('input');if(ins[0]&&ins[0].value.trim())parts.push({desc:ins[0].value,qty:parseFloat(ins[1].value)||1,note:ins[2]?ins[2].value:''});});return parts;}
+function appPR(p){var tr=document.createElement('tr');tr.setAttribute('data-pn',p.pn||'');var si='border:1.5px solid var(--silver);border-radius:3px;padding:4px 6px;font-size:12px;background:var(--white);color:var(--dark);width:100%;font-family:Barlow,sans-serif';tr.innerHTML='<td style="width:40%"><input type="text" value="'+(p.desc||'')+'" placeholder="e.g. Air filter, Labor — rebuild" style="'+si+'"></td><td style="width:12%"><input type="number" value="'+(p.qty||1)+'" min="1" style="'+si+'"></td><td style="display:flex;gap:4px;padding:0"><input type="text" value="'+(p.note||'')+'" placeholder="Optional notes..." style="'+si+';flex:1"><button class="btn sm del" onclick="this.closest(\'tr\').remove()" style="padding:3px 7px;flex-shrink:0">&#x2715;</button></td>';document.getElementById('pt-body').appendChild(tr);}
+function getParts(){var parts=[];document.querySelectorAll('#pt-body tr').forEach(function(r){var ins=r.querySelectorAll('input');if(ins[0]&&ins[0].value.trim())parts.push({pn:r.getAttribute('data-pn')||'',desc:ins[0].value,qty:parseFloat(ins[1].value)||1,note:ins[2]?ins[2].value:''});});return parts;}
 
 function saveWO(){
   var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
   var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
   var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
-  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,intakeBy:prev.intakeBy||myDisplayName(),tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
+  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,intakeBy:prev.intakeBy||myDisplayName(),tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,statusTs:null,quick:document.getElementById('m-quick').checked,authAmt:document.getElementById('m-auth').value.trim(),dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
+  o.statusTs=(!editWOid||prev.status!==o.status)?Date.now():(prev.statusTs||null);
   writeOrder(o);syncEquipmentFromOrder(o);closeM('wo-modal');
 }
 // ── Every work order automatically logs its equipment on the customer's record as "Serviced by Miller Hardware" (same shape as "Log Equipment", different record type than an actual sale), deduped so repeat visits for the same unit don't pile up. ──
@@ -1906,15 +2053,17 @@ function findConflict(unitId,start,end){
 }
 function writeRentalBooking(b){if(DB){DB.ref('rental_bookings/'+b.id).set(b);}else{RENTAL_BOOKINGS[b.id]=b;renderRentalCalendar();}}
 function cancelReservation(id){
-  if(!confirm('Cancel this reservation?'))return;
+  dangerConfirm('Cancel reservation?','Cancel and delete this reservation?','Yes, cancel it',function(){
   if(DB){DB.ref('rental_bookings/'+id).remove();}else{delete RENTAL_BOOKINGS[id];}
   renderRentalCalendar();
+  });
 }
 function writeWaitlistEntry(w){if(DB){DB.ref('rental_waitlist/'+w.id).set(w);}else{RENTAL_WAITLIST[w.id]=w;renderRentalCalendar();}}
 function removeFromWaitlist(id){
-  if(!confirm('Remove from waitlist?'))return;
+  dangerConfirm('Remove from waitlist?','Remove this person from the waitlist?','Yes, remove',function(){
   if(DB){DB.ref('rental_waitlist/'+id).remove();}else{delete RENTAL_WAITLIST[id];}
   renderRentalCalendar();
+  });
 }
 function rsvCustSearch(){
   var q=(document.getElementById('rsv-cust-search').value||'').toLowerCase().trim();
@@ -2171,7 +2320,7 @@ function delEquip(){if(editEqIdx===null)return;var cid=editEqCid,idx=editEqIdx;r
 
 function openContactLog(woid){contactLogWOid=woid;document.getElementById('cl-type').value='Called customer';document.getElementById('cl-note').value='';var now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());document.getElementById('cl-dt').value=now.toISOString().slice(0,16);document.getElementById('contact-modal').classList.add('open');}
 function saveContactLog(){var note=document.getElementById('cl-note').value.trim();if(!note){alert('Please enter a note.');return;}var logs=CONTACTLOGS[contactLogWOid]?JSON.parse(JSON.stringify(CONTACTLOGS[contactLogWOid])):[];logs.unshift({type:document.getElementById('cl-type').value,note:note,dt:document.getElementById('cl-dt').value});writeContactLogs(contactLogWOid,logs);closeM('contact-modal');openDet(contactLogWOid);}
-function deleteContactLog(woid,idx){if(!confirm('Delete this log entry?'))return;var logs=CONTACTLOGS[woid]||[];logs.splice(idx,1);writeContactLogs(woid,logs);openDet(woid);}
+function deleteContactLog(woid,idx){dangerConfirm('Delete contact log?','Delete this customer contact log entry?','Yes, delete it',function(){var logs=CONTACTLOGS[woid]||[];logs.splice(idx,1);writeContactLogs(woid,logs);openDet(woid);});}
 
 function newWOForCustEquip(cid,eqIdx){
   var eq=custEquip(cid)[eqIdx];openNewWO();
@@ -2183,7 +2332,7 @@ function newWOForCustEquip(cid,eqIdx){
 function openDet(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
   var prows=(o.parts||[]).map(function(p,pi){return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--off);font-family:monospace;font-size:11px;color:var(--gray2)">'+(p.pn||'')+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off)">'+p.desc+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);text-align:center">'+p.qty+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);color:var(--gray2)">'+(p.note||'')+'</td><td style="padding:3px 4px;border-bottom:1px solid var(--off)"><button onclick="deletePart(\''+id+'\','+pi+')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:2px 5px;font-weight:700">&#x2715;</button></td></tr>';}).join('');
-  var stats=['Intake','Diagnosing','In Repair','Waiting on Parts','Ready','Picked Up'];
+  var stats=STATUS_LIST;
   var sbtns=stats.map(function(s){var isW=s==='Waiting on Parts';return '<button class="sbtn'+(isW?' waiting-btn':'')+(o.status===s?' active':'')+'" onclick="quickStatus(\''+id+'\',\''+s+'\')">'+s+'</button>';}).join('');
   var eqf=[['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];});
   var atts=ATTACHMENTS[id]||[];
@@ -2192,10 +2341,23 @@ function openDet(id){
   var logHtml=logs.length?logs.map(function(l,i){return '<div class="contact-log-entry"><div style="font-weight:600">'+l.type+'</div><div>'+l.note+'</div><div class="cl-meta">'+l.dt+'<button class="btn sm del" onclick="deleteContactLog(\''+id+'\','+i+')" style="margin-left:8px;padding:1px 6px;font-size:10px">remove</button></div></div>';}).join(''):'<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No contact logged yet.</div>';
   var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+o.partsWaiting+'</div>':'';
   var custAlert=c.notes?'<div class="cust-alert"><strong>&#9888; Account Note:</strong> '+c.notes+'</div>':'';
+  var authA=parseFloat(o.authAmt),authHtml='';
+  if(o.status!=='Picked Up'&&o.status!=='Ready'){
+    if(authA>0)authHtml='<div style="background:#eaf3de;border:1.5px solid #9cc68a;border-radius:3px;padding:8px 12px;font-size:13px;color:#1a5c0a;margin-bottom:10px">&#10003; Customer approved repairs up to <strong>$'+authA+'</strong>. Go ahead without calling.</div>';
+    else if(['Intake','Diagnosing','Waiting on Customer'].indexOf(o.status||'Intake')>=0)authHtml='<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:13px;color:#633806;margin-bottom:10px">No pre-approval on file. Call the customer with the diagnosis before doing repairs.</div>';
+  }
+  var linkedPOs=woPartOrders(id);
+  var poHtml=linkedPOs.length?'<div style="border:1.5px solid var(--silver);border-radius:3px;padding:8px 12px;margin-bottom:10px;font-size:12px"><div style="font-weight:700;margin-bottom:4px">Parts ordered for this job</div>'
+    +linkedPOs.map(function(x){return '<div style="padding:3px 0;border-top:1px solid var(--off)">'+(x.p.pn?'<span style="font-family:monospace;font-weight:700">'+x.p.pn+'</span> ':'')+x.p.desc+(x.p.qty>1?' &times;'+x.p.qty:'')+' &mdash; '+poStatusText(x.p,x.cat)+'</div>';}).join('')+'</div>':'';
+  var diagHtml='<div class="sect-lbl">Quick Diagnosis</div><div style="font-size:11px;color:var(--muted);margin:-2px 0 6px">Tap what you found. It fills in the note and the usual parts, which you can edit before adding.</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
+    +DIAG_TEMPLATES.map(function(t,i){return '<button type="button" class="diag-chip" onclick="openDiagPanel(\''+id+'\','+i+')">'+t.name+'</button>';}).join('')
+    +'</div><div id="diag-panel-'+id+'"></div>';
+  var lookupHtml='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 8px"><button type="button" class="btn sm outline" onclick="openPartsLookup(\''+id+'\',\'pt\')">&#128270; Parts Diagrams (PartsTree)</button><button type="button" class="btn sm outline" onclick="openPartsLookup(\''+id+'\',\'g\')">&#128270; Search Google</button></div>'+partHistoryHtml(id);
   document.getElementById('det-body').innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+'</div>'+(o.tag||o.ticket?'<div style="margin-top:3px">'+(o.tag?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Tag: '+o.tag+'</span>':'')+(o.tag&&o.ticket?'&nbsp;&nbsp;&middot;&nbsp;&nbsp;':'')+(o.ticket?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Ticket #'+o.ticket+'</span>':'')+'</div>':'')+'<div style="font-size:21px;font-weight:800;margin-top:4px">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Done: '+o.dateOut+'</div>':'')+(o.location||o.intakeBy?'<div style="font-size:14px;font-weight:700;color:var(--dark);margin-top:4px">'+(o.location||'')+(o.intakeBy?(o.location?' &middot; ':'')+'Taken in by '+o.intakeBy:'')+'</div>':'')+'<div style="font-size:17px;font-weight:800;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
-    +custAlert+wStatus+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+' &nbsp;'+stageAgeChip(o)+' '+quickChip(o)+'</div>'+(o.tag||o.ticket?'<div style="margin-top:3px">'+(o.tag?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Tag: '+o.tag+'</span>':'')+(o.tag&&o.ticket?'&nbsp;&nbsp;&middot;&nbsp;&nbsp;':'')+(o.ticket?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Ticket #'+o.ticket+'</span>':'')+'</div>':'')+'<div style="font-size:21px;font-weight:800;margin-top:4px">'+((c.first||'')+' '+(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+c.phone+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Done: '+o.dateOut+'</div>':'')+(o.location||o.intakeBy?'<div style="font-size:14px;font-weight:700;color:var(--dark);margin-top:4px">'+(o.location||'')+(o.intakeBy?(o.location?' &middot; ':'')+'Taken in by '+o.intakeBy:'')+'</div>':'')+'<div style="font-size:17px;font-weight:800;margin-top:3px">'+(o.tech||'')+'</div></div></div>'
+    +custAlert+authHtml+wStatus+poHtml+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+f[1]+'</div></div>';}).join('')+'</div>'
+    +lookupHtml
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+o.complaint+'</div></div>':'')
     +'<div class="sect-lbl">Notes</div>'
     +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+o.notes+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
@@ -2204,6 +2366,7 @@ function openDet(id){
     +'<button class="btn sm" id="mic-'+id+'" onclick="startDictation(\''+id+'\')" title="Dictate a note" style="align-self:flex-end;min-width:44px;font-size:15px">&#127908;</button>'
     +'<button class="btn sm primary" onclick="quickAddNote(\''+id+'\')" style="align-self:flex-end">+ Add Note</button>'
     +'</div>'
+    +diagHtml
     +'<hr>'
     +(o.parts&&o.parts.length?'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Part #</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Description</th><th style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Qty</th><th style="text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1.5px solid var(--silver)">Notes</th></tr></thead><tbody>'+prows+'</tbody></table>':'<div style="font-size:12px;color:var(--muted);padding:6px 0;font-style:italic">No parts or labor logged.</div>')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-top:6px">'
@@ -2278,12 +2441,13 @@ function handleAttach(woid,inp){
   reader.readAsDataURL(file);inp.value='';
 }
 function removeAtt(woid,idx){
-  if(!confirm('Remove this photo?'))return;
+  dangerConfirm('Delete photo?','Permanently delete this photo from the work order?','Yes, delete it',function(){
   var atts=ATTACHMENTS[woid]||[];
   var att=atts[idx];
   if(att&&att.path&&STORAGE){STORAGE.ref(att.path).delete().catch(function(){});}
   atts.splice(idx,1);
   writeAttachments(woid,atts);openDet(woid);
+  });
 }
 function viewImg(woid,idx){var a=ATTACHMENTS[woid];if(!a||!a[idx])return;var src=a[idx].url||a[idx].data||'';var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%;height:auto">');}
 
@@ -2372,6 +2536,7 @@ function printWO(id){
     +'</div>'
     +'</div>'
     +(o.complaint?'<div style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Customer Complaint</div><div style="font-size:13px;padding:10px 12px;background:#f6f4f1;border-left:3px solid #1a1a1a;line-height:1.5">'+o.complaint+'</div></div>':'')
+    +'<div style="margin-bottom:12px;padding:8px 12px;border:1.5px solid #1a1a1a;font-size:12px"><strong>Repair approval:</strong> '+(parseFloat(o.authAmt)>0?'Customer approves repairs up to <strong>$'+parseFloat(o.authAmt)+'</strong> without further contact. We will call before going over this amount.':'Customer approves repairs up to $________ without further contact. (Blank = call before repairs.)')+'</div>'
     +qrBlock
     +sigBlock
     +'<div style="border-top:1px solid #ccc;padding-top:10px;font-size:10px;color:#666;line-height:1.5">Not responsible for loss or damage to articles left in equipment. Work not claimed within 30 days subject to storage fees. Miller Hardware Company &mdash; Est. 1931.</div>'
@@ -2395,6 +2560,8 @@ function printWO(id){
     +(o.ticket?'<div style="font-size:11px;color:#555">Open Ticket # '+o.ticket+'</div>':'')
     +(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')
     +(o.estDate?'<div style="font-size:11px;color:#555">Est. Done: '+o.estDate+'</div>':'')
+    +'<div style="font-size:12px;font-weight:800;margin-top:3px;border:1.5px solid #1a1a1a;padding:2px 6px;display:inline-block">'+(parseFloat(o.authAmt)>0?'OK TO REPAIR UP TO $'+parseFloat(o.authAmt):'CALL BEFORE REPAIRS')+'</div>'
+    +(o.quick?'<div style="font-size:11px;font-weight:800;margin-top:2px">QUICK JOB &mdash; DO FIRST</div>':'')
     +'</div>'
     +'</div>'
     +'</div>'
@@ -2471,9 +2638,10 @@ function exportCSV(type){
 }
 function exportJSON(){dl('data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({exported:new Date().toISOString(),orders:ORDERS,customers:CUSTS,techs:TECHS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,svcIntervals:SVC_INTERVALS},null,2)),'sawshop-backup-'+today()+'.json');}
 function dl(href,name){var a=document.createElement('a');a.href=href;a.download=name;a.click();}
-function saveFB(){var raw=document.getElementById('fb-cfg').value.trim();if(!raw)return;try{var cl=raw.replace(/(\w+)\s*:/g,'"$1":').replace(/'/g,'"');if(cl.indexOf('{')!==0)cl=cl.substring(cl.indexOf('{'));JSON.parse(cl);}catch(e){document.getElementById('fb-msg').textContent='Could not parse config.';return;}localStorage.setItem('fb_config_raw',raw);document.getElementById('fb-msg').style.color='#1a5c0a';document.getElementById('fb-msg').textContent='Saved — reload to connect.';}
+function saveFB(){var raw=document.getElementById('fb-cfg').value.trim();if(!raw)return;dangerConfirm('Change database connection?','This points THIS device at a different Firebase database. A wrong config will make the app stop showing shop data on this device until it is cleared.\n\nOnly do this if Mike asked you to.','Yes, change it',function(){saveFBNow(raw);});}
+function saveFBNow(raw){try{var cl=raw.replace(/(\w+)\s*:/g,'"$1":').replace(/'/g,'"');if(cl.indexOf('{')!==0)cl=cl.substring(cl.indexOf('{'));JSON.parse(cl);}catch(e){document.getElementById('fb-msg').textContent='Could not parse config.';return;}localStorage.setItem('fb_config_raw',raw);document.getElementById('fb-msg').style.color='#1a5c0a';document.getElementById('fb-msg').textContent='Saved — reload to connect.';}
 function clearFB(){localStorage.removeItem('fb_config_raw');document.getElementById('fb-cfg').value='';document.getElementById('fb-msg').textContent='Cleared.';}
-function clearFBAndReload(){localStorage.removeItem('fb_config_raw');location.reload();}
+function clearFBAndReload(){dangerConfirm('Reset database connection?','Clear any saved database config on this device and reload the app?','Yes, clear and reload',function(){localStorage.removeItem('fb_config_raw');location.reload();});}
 function closeM(id){document.getElementById(id).classList.remove('open');}
 function custSearch(){
   var q=(document.getElementById('m-cust-search').value||'').toLowerCase().trim();
@@ -2560,8 +2728,35 @@ function setCustById(cid){
 }
 
 function requireAdminDelete(msg, fn){
-  if(!isAdmin()){alert('Only the shop owner can delete or change this.\n\nAsk Mike to sign in on his account to do it.');return;}
-  if(confirm(msg)){fn();}
+  if(!canManage()){alert('Only the shop owner can delete or change this.\n\nAsk Mike to sign in on his account to do it.');return;}
+  dangerConfirm('Delete this?',msg,'Yes, delete it',fn);
+}
+// ── Big red warning box for anything that deletes data or cannot be undone. Cancel is the default (Enter/Esc/click outside = cancel). ──
+function dangerConfirm(title,msg,okLabel,fn){
+  var old=document.getElementById('danger-modal');if(old)old.remove();
+  var bg=document.createElement('div');bg.id='danger-modal';
+  bg.style.cssText='position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  var box=document.createElement('div');
+  box.style.cssText='background:#fff;border:5px solid #CC0000;border-radius:12px;max-width:520px;width:100%;padding:26px 22px 22px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.5);font-family:Barlow,sans-serif;color:#1a1a1a;max-height:90vh;overflow:auto';
+  var icon=document.createElement('div');icon.style.cssText='font-size:58px;line-height:1;color:#CC0000';icon.innerHTML='&#9888;';
+  var h=document.createElement('div');h.style.cssText='font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:800;color:#CC0000;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 10px';h.textContent=title||'Are you sure?';
+  var m=document.createElement('div');m.style.cssText='font-size:16px;line-height:1.5;white-space:pre-wrap;text-align:left;background:#f6f4f1;border-radius:6px;padding:12px 14px';m.textContent=msg||'';
+  var warn=document.createElement('div');warn.style.cssText='margin:14px 0 18px;font-size:17px;font-weight:800;color:#fff;background:#CC0000;border-radius:6px;padding:10px 12px';warn.textContent='THIS CANNOT BE UNDONE.';
+  var row=document.createElement('div');row.style.cssText='display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
+  var cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel — keep it';
+  cancel.style.cssText='flex:1;min-width:150px;padding:14px 16px;font-size:17px;font-weight:700;border:2px solid #999;border-radius:6px;background:#fff;color:#1a1a1a;cursor:pointer;font-family:Barlow,sans-serif';
+  var ok=document.createElement('button');ok.type='button';ok.textContent=okLabel||'Yes, do it';
+  ok.style.cssText='flex:1;min-width:150px;padding:14px 16px;font-size:17px;font-weight:800;border:2px solid #CC0000;border-radius:6px;background:#CC0000;color:#fff;cursor:pointer;font-family:Barlow,sans-serif';
+  function close(){document.removeEventListener('keydown',onKey,true);bg.remove();}
+  function onKey(e){if(e.key==='Escape'||e.key==='Enter'){e.preventDefault();e.stopPropagation();close();}}
+  cancel.onclick=close;
+  ok.onclick=function(){close();fn();};
+  bg.onclick=function(e){if(e.target===bg)close();};
+  row.appendChild(cancel);row.appendChild(ok);
+  box.appendChild(icon);box.appendChild(h);box.appendChild(m);box.appendChild(warn);box.appendChild(row);
+  bg.appendChild(box);document.body.appendChild(bg);
+  document.addEventListener('keydown',onKey,true);
+  cancel.focus();
 }
 document.querySelectorAll('.modal-bg').forEach(function(el){el.addEventListener('click',function(e){if(e.target===el)el.classList.remove('open');});});
 function downloadInvoice(id){
@@ -2606,6 +2801,182 @@ function downloadInvoice(id){
   doc.setFontSize(9);doc.setTextColor(130);
   doc.text('Parts list for quote generation — prices set by point of sale.',M,endY+22);
   doc.save('Miller-Parts-Invoice-WO'+(o.woNum||'')+'.pdf');
+}
+// ── Parts lookup + "parts used on this model before" (learned from our own work order history) ──
+function normKey(s){return (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function normBrand(b){return normKey(brandFix(b)||b);}
+function modelPartHistory(o){
+  var mk=normKey(o.model);if(!mk)return [];
+  var bk=normBrand(o.brand);
+  var byPn={};
+  function add(pn,desc,date){
+    pn=(pn||'').trim();if(!pn)return;
+    var k=pn.toUpperCase().replace(/\s+/g,' ');
+    if(!byPn[k])byPn[k]={pn:pn,desc:desc||'',count:0,last:''};
+    var h=byPn[k];h.count++;
+    if(desc&&(!h.desc||(date||'')>=h.last))h.desc=desc;
+    if((date||'')>h.last)h.last=date||'';
+  }
+  Object.keys(ORDERS).forEach(function(k){
+    var x=ORDERS[k];if(!x||x.id===o.id)return;
+    if(normKey(x.model)!==mk)return;
+    var xb=normBrand(x.brand);if(bk&&xb&&bk!==xb)return;
+    var seen={};
+    (x.parts||[]).forEach(function(p){var key=(p.pn||'').trim().toUpperCase();if(!key||seen[key])return;seen[key]=1;add(p.pn,p.desc,x.dateIn);});
+  });
+  return Object.keys(byPn).map(function(k){return byPn[k];})
+    .sort(function(a,b){return b.count-a.count||(b.last||'').localeCompare(a.last||'');});
+}
+var _histCache={};
+function partHistoryHtml(id){
+  var o=ORDERS[id];if(!o)return '';
+  if(!normKey(o.model))return '<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">Add a model number (Edit) to search parts diagrams and see parts used on this model before.</div>';
+  var list=modelPartHistory(o).slice(0,12);_histCache[id]=list;
+  var name=[o.brand,o.model].filter(Boolean).join(' ');
+  if(!list.length)return '<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">No part numbers recorded on a '+name+' yet. They will show up here as techs enter part numbers on jobs for this model.</div>';
+  return '<div style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Parts used on a '+name+' before &mdash; tap to fill the Add Part box</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">'
+    +list.map(function(h,i){return '<button type="button" class="hist-chip" onclick="useHistPart(\''+id+'\','+i+')"><b>'+h.pn+'</b> '+(h.desc||'')+(h.count>1?' <span style="color:var(--muted)">&times;'+h.count+'</span>':'')+'</button>';}).join('')
+    +'</div>';
+}
+function useHistPart(id,i){
+  var h=(_histCache[id]||[])[i];if(!h)return;
+  var pn=document.getElementById('ql-pn-'+id),ds=document.getElementById('ql-note-'+id);
+  if(pn)pn.value=h.pn;if(ds){ds.value=h.desc||'';ds.focus();ds.scrollIntoView({block:'center',behavior:'smooth'});}
+}
+function openPartsLookup(id,kind){
+  var o=ORDERS[id];if(!o)return;
+  var q=[o.brand,o.model||o.product].filter(Boolean).join(' ').trim();
+  if(!(o.model||o.product)){alert('Add a model number to this work order first (tap Edit).');return;}
+  var url=kind==='g'
+    ?'https://www.google.com/search?q='+encodeURIComponent(q+' parts diagram')
+    :'https://www.partstree.com/search/?search='+encodeURIComponent(q);
+  window.open(url,'_blank','noopener');
+}
+// ── Quick Diagnosis templates: one tap fills the diagnosis note + usual parts (part #s pre-filled from history) ──
+// kw = words to match against past part descriptions for this model; opt = unchecked by default.
+var DIAG_TEMPLATES=[
+  {name:'Carburetor - replace',note:'Carburetor faulty - replace carburetor.',parts:[{desc:'Carburetor',kw:/carb/i,not:/kit|gasket|clean/i},{desc:'Fuel filter',kw:/fuel filter/i},{desc:'Air filter',kw:/air filter/i,opt:true}]},
+  {name:'Carburetor - rebuild',note:'Carburetor dirty/varnished - clean and rebuild.',parts:[{desc:'Carburetor kit',kw:/carb.*kit|kit.*carb/i},{desc:'Fuel filter',kw:/fuel filter/i,opt:true}]},
+  {name:'Fuel system',note:'Fuel lines cracked/leaking - replace fuel line, filter and primer bulb.',parts:[{desc:'Fuel line',kw:/fuel line|fuel hose/i},{desc:'Fuel filter',kw:/fuel filter/i},{desc:'Primer bulb',kw:/primer/i}]},
+  {name:'Tune-up',note:'Tune-up: new spark plug, air filter, fuel filter. Adjust and test run.',parts:[{desc:'Spark plug',kw:/plug/i},{desc:'Air filter',kw:/air filter/i},{desc:'Fuel filter',kw:/fuel filter/i},{desc:'Engine oil',kw:/oil/i,not:/filter|seal/i,opt:true}]},
+  {name:'Recoil / pull cord',note:'Recoil starter - replace rope / repair recoil.',parts:[{desc:'Starter rope',kw:/rope|cord/i},{desc:'Recoil starter assembly',kw:/recoil|starter/i,not:/rope|cord/i,opt:true}]},
+  {name:'Chain & bar',note:'Chain dull/worn - replace chain. Check bar and sprocket.',parts:[{desc:'Saw chain',kw:/chain/i,not:/brake|catch/i},{desc:'Guide bar',kw:/bar/i,opt:true},{desc:'Sprocket / rim',kw:/sprocket|rim/i,opt:true}]},
+  {name:'Blades',note:'Blades dull/damaged - sharpen or replace and balance.',parts:[{desc:'Mower blade',kw:/blade/i}]},
+  {name:'Belt',note:'Belt worn/broken - replace belt.',parts:[{desc:'Drive belt',kw:/belt/i},{desc:'Deck belt',kw:/deck belt/i,opt:true}]},
+  {name:'Ignition / no spark',note:'No spark - replace ignition coil and spark plug.',parts:[{desc:'Ignition coil',kw:/coil|ignition|module/i},{desc:'Spark plug',kw:/plug/i}]},
+  {name:'Battery / charging',note:'Battery not holding charge - replace battery, check charging system.',parts:[{desc:'Battery',kw:/battery/i},{desc:'Voltage regulator',kw:/regulator|rectifier/i,opt:true}]},
+  {name:'Oil change',note:'Oil change.',parts:[{desc:'Engine oil',kw:/oil/i,not:/filter|seal/i},{desc:'Oil filter',kw:/oil filter/i,opt:true}]},
+  {name:'Trimmer head',note:'Trimmer head worn - replace head / reload line.',parts:[{desc:'Trimmer head',kw:/head/i},{desc:'Trimmer line',kw:/line/i,not:/fuel/i,opt:true}]}
+];
+function histMatch(list,tp){
+  for(var i=0;i<list.length;i++){var d=list[i].desc||'';if(tp.kw.test(d)&&!(tp.not&&tp.not.test(d)))return list[i];}
+  return null;
+}
+function openDiagPanel(id,ti){
+  var o=ORDERS[id],t=DIAG_TEMPLATES[ti];if(!o||!t)return;
+  var box=document.getElementById('diag-panel-'+id);if(!box)return;
+  var hist=modelPartHistory(o);
+  var inSt='padding:5px 8px;border:1.5px solid var(--silver);border-radius:3px;font-size:12px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)';
+  box.innerHTML='';
+  var wrap=document.createElement('div');
+  wrap.style.cssText='border:2px solid var(--red);border-radius:4px;padding:10px;margin-bottom:10px;background:var(--white)';
+  var ttl=document.createElement('div');ttl.style.cssText='font-weight:800;font-size:14px;margin-bottom:6px';ttl.textContent=t.name;wrap.appendChild(ttl);
+  var noteLbl=document.createElement('div');noteLbl.style.cssText='font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:3px';noteLbl.textContent='Diagnosis note';wrap.appendChild(noteLbl);
+  var noteIn=document.createElement('input');noteIn.type='text';noteIn.id='diag-note-'+id;noteIn.value=t.note;noteIn.style.cssText=inSt+';width:100%;margin-bottom:8px';wrap.appendChild(noteIn);
+  var partsLbl=noteLbl.cloneNode();partsLbl.textContent='Parts (uncheck any you do not need; part # filled in from past jobs on this model when we have one)';wrap.appendChild(partsLbl);
+  t.parts.forEach(function(tp,pi){
+    var h=histMatch(hist,tp);
+    var row=document.createElement('div');row.className='diag-row';row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:4px 0;border-bottom:1px solid var(--off)';
+    var ck=document.createElement('input');ck.type='checkbox';ck.className='dg-use';ck.checked=!tp.opt;ck.style.cssText='width:16px;height:16px;accent-color:var(--red)';
+    var pn=document.createElement('input');pn.type='text';pn.className='dg-pn';pn.placeholder='Part #';pn.value=h?h.pn:'';pn.style.cssText=inSt+';width:120px;font-family:monospace';
+    if(h)pn.title='Used on this model before: '+(h.desc||'')+(h.count>1?' (x'+h.count+')':'');
+    var ds=document.createElement('input');ds.type='text';ds.className='dg-desc';ds.value=h&&h.desc?h.desc:tp.desc;ds.style.cssText=inSt+';flex:1;min-width:120px';
+    var qty=document.createElement('input');qty.type='number';qty.className='dg-qty';qty.value='1';qty.min='1';qty.style.cssText=inSt+';width:55px';
+    var ordL=document.createElement('label');ordL.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gray2);white-space:nowrap';
+    var ord=document.createElement('input');ord.type='checkbox';ord.className='dg-order';ord.style.cssText='width:14px;height:14px;accent-color:var(--red)';
+    ordL.appendChild(ord);ordL.appendChild(document.createTextNode('Order it'));
+    var vs=document.createElement('select');vs.className='dg-vendor';vs.style.cssText=inSt+';max-width:120px';vs.innerHTML=vendorOptionListHTML();
+    if(/stihl/i.test(o.brand||''))vs.value='Stihl';
+    row.appendChild(ck);row.appendChild(pn);row.appendChild(ds);row.appendChild(qty);row.appendChild(ordL);row.appendChild(vs);
+    if(h){var tag=document.createElement('span');tag.style.cssText='font-size:10px;color:#2d7d1e;font-weight:700';tag.textContent='from history';row.appendChild(tag);}
+    wrap.appendChild(row);
+  });
+  var a=parseFloat(o.authAmt);
+  var stRow=document.createElement('div');stRow.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:12px';
+  stRow.appendChild(document.createTextNode('Then set status to:'));
+  var stSel=document.createElement('select');stSel.id='diag-status-'+id;stSel.style.cssText=inSt;
+  [['','(leave as is)'],['Waiting on Customer','Waiting on Customer - need approval'],['In Repair','In Repair'],['Waiting on Parts','Waiting on Parts']].forEach(function(s){var op=document.createElement('option');op.value=s[0];op.textContent=s[1];stSel.appendChild(op);});
+  stSel.value=a>0?'In Repair':'Waiting on Customer';
+  stRow.appendChild(stSel);
+  var hint=document.createElement('span');hint.style.cssText='color:var(--muted)';
+  hint.textContent=a>0?'Customer approved up to $'+a+'.':'No pre-approval on file, so call the customer.';
+  stRow.appendChild(hint);
+  wrap.appendChild(stRow);
+  var btns=document.createElement('div');btns.style.cssText='display:flex;gap:6px;margin-top:10px';
+  var bAdd=document.createElement('button');bAdd.className='btn sm primary';bAdd.textContent='Add to Work Order';bAdd.onclick=function(){applyDiag(id);};
+  var bCan=document.createElement('button');bCan.className='btn sm';bCan.textContent='Cancel';bCan.onclick=function(){box.innerHTML='';};
+  btns.appendChild(bAdd);btns.appendChild(bCan);wrap.appendChild(btns);
+  box.appendChild(wrap);
+  // Auto-pick "Waiting on Parts" once anything is marked to order, unless they already chose something else by hand.
+  wrap.querySelectorAll('.dg-order').forEach(function(c){c.onchange=function(){if(stSel.dataset.touched)return;var any=wrap.querySelector('.dg-order:checked');stSel.value=any?'Waiting on Parts':(a>0?'In Repair':'Waiting on Customer');};});
+  stSel.onchange=function(){stSel.dataset.touched='1';};
+  wrap.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function applyDiag(id){
+  var o=ORDERS[id];if(!o)return;
+  var box=document.getElementById('diag-panel-'+id);if(!box)return;
+  var note=(document.getElementById('diag-note-'+id)||{}).value||'';note=note.trim();
+  var parts=(o.parts||[]).slice(),ordered=[],anyOrder=false;
+  box.querySelectorAll('.diag-row').forEach(function(r){
+    if(!r.querySelector('.dg-use').checked)return;
+    var desc=r.querySelector('.dg-desc').value.trim();if(!desc)return;
+    var pn=r.querySelector('.dg-pn').value.trim(),qty=parseFloat(r.querySelector('.dg-qty').value)||1;
+    var needsOrder=r.querySelector('.dg-order').checked,vendor=r.querySelector('.dg-vendor').value||'';
+    parts.push({pn:pn,desc:desc,qty:qty,note:needsOrder?'On order':''});
+    if(needsOrder){
+      anyOrder=true;ordered.push(desc);
+      var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
+      if(!PARTORDERS.other)PARTORDERS.other=[];
+      PARTORDERS.other.push({pn:pn,desc:desc,qty:qty,equip:equip,notes:'',woId:id,woNum:o.woNum||null,vendor:vendor,location:o.location||'Yellville',ordered:false,received:false,paid:false,added:today(),addedBy:myDisplayName()});
+    }
+  });
+  o.parts=parts;
+  if(note){
+    var stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    var line=stamp+': Diagnosis: '+note;
+    o.notes=o.notes?(o.notes+'\n'+line):line;
+    o.notesTs=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  }
+  var ns=(document.getElementById('diag-status-'+id)||{}).value||'';
+  if(ns){setStatus(o,ns);if(ns==='Waiting on Parts'&&!o.partsWaiting&&ordered.length)o.partsWaiting=ordered.join(', ');if(ns!=='Waiting on Parts')o.partsWaiting='';}
+  writeOrder(o);
+  if(anyOrder){writePartOrders();renderPartOrders();}
+  openDet(id);
+}
+// ── Parts ordered for a specific work order (linked items in Parts to Order) ──
+function woPartOrders(woid){
+  var out=[];
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.woId===woid)out.push({cat:cat,i:i,p:p});});});
+  return out;
+}
+function fmtShortDate(d){var t=dateStrMs(d);return t?new Date(t).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):(d||'');}
+function partEtaLate(p){return !p.received&&p.eta&&p.eta<today();}
+function poStatusText(p,cat){
+  if(p.received)return '<span style="color:#2d7d1e;font-weight:700">Received '+(p.receivedOn||'')+'</span>';
+  var v=cat==='stihl'?'Stihl':(p.vendor||'');
+  if(p.batchId||p.ordered){
+    return '<span style="color:var(--gray2)">Ordered'+(v?' from '+v:'')+(p.batchOrderedAt?' '+p.batchOrderedAt:'')+'</span>'
+      +(p.eta?(partEtaLate(p)?' &middot; <span style="color:#fff;background:var(--red);padding:1px 5px;border-radius:2px;font-weight:700">LATE &mdash; was due '+fmtShortDate(p.eta)+'</span>':' &middot; <strong>Due '+fmtShortDate(p.eta)+'</strong>'):'');
+  }
+  return '<span style="color:#BA7517;font-weight:700">Not ordered yet'+(v?' ('+v+')':' &mdash; needs a vendor')+'</span>';
+}
+// Latest ETA among a job's parts that have not arrived yet (for the Waiting on Parts list).
+function woPartsEta(woid){
+  var etas=woPartOrders(woid).filter(function(x){return !x.p.received;}).map(function(x){return x.p.eta||'';});
+  if(!etas.length)return null;
+  if(etas.some(function(e){return !e;}))return {eta:'',unknown:true};
+  etas.sort();var e=etas[etas.length-1];return {eta:e,late:e<today()};
 }
 function quickAddPart(woid){
   // One button: always adds to the WO's own parts list. If "Needs to be ordered" is checked,
@@ -2656,7 +3027,10 @@ function sigSectionHtml(id){
 function openSigPad(woid,type){
   _sigWoid=woid;_sigType=type;_sigHasInk=false;
   document.getElementById('sig-title').textContent=SIG_TITLES[type]||'Signature';
-  document.getElementById('sig-statement').textContent=SIG_STMTS[type]||'';
+  var stmt=SIG_STMTS[type]||'';
+  var _so=ORDERS[woid]||{},_sa=parseFloat(_so.authAmt);
+  if(type==='intake'&&_sa>0)stmt+=' I also approve repairs up to $'+_sa+' without further contact.';
+  document.getElementById('sig-statement').textContent=stmt;
   var canvas=document.getElementById('sig-canvas');
   _sigCtx=canvas.getContext('2d');
   _sigCtx.clearRect(0,0,canvas.width,canvas.height);
@@ -2713,10 +3087,12 @@ function quickAddNote(woid){
   writeOrder(o);openDet(woid);
 }
 function deletePart(woid,idx){
-  if(!confirm('Remove this part?'))return;
   var o=ORDERS[woid];if(!o)return;
+  var pp=(o.parts||[])[idx]||{};
+  dangerConfirm('Remove part?','Remove "'+((pp.pn?pp.pn+' ':'')+(pp.desc||'this part'))+'" from work order #'+o.woNum+'?','Yes, remove it',function(){
   var parts=(o.parts||[]).slice();parts.splice(idx,1);
   o.parts=parts;writeOrder(o);openDet(woid);
+  });
 }
 function openPartOrder(preSpecial){
   document.getElementById('po-mtitle').textContent=preSpecial?'Add Special Order Part':'Add Part';
@@ -2749,9 +3125,11 @@ function togglePOFlag(cat,idx,flag){
   writePartOrders();renderPartOrders();
 }
 function deletePO(cat,idx){
-  if(!confirm('Remove from list?'))return;
+  var p=(PARTORDERS[cat]||[])[idx]||{};
+  dangerConfirm('Delete part?','Delete "'+((p.pn?p.pn+' ':'')+(p.desc||'this part'))+'" from Parts to Order?','Yes, delete it',function(){
   PARTORDERS[cat].splice(idx,1);
   writePartOrders();renderPartOrders();
+  });
 }
 // Search is a separate, standalone lookup — it renders into its own area and never takes over the ordering view below it.
 // Parts to Order is strictly per-location — staff only ever see their own store's carts, never the other's, no toggle to peek.
@@ -2843,9 +3221,13 @@ function buildVendorCard(v,batchId,items){
   hdrLeft.appendChild(hdr);
   // Wider single-column cards have room for a bit more context on the collapsed line.
   var infoParts=[];
+  var batchEta='',batchLate=false;
   if(batchId){
     var prog=batchProgress(batchId);
     infoParts.push(prog.received+' of '+prog.total+' received');
+    batchEta=(items.filter(function(it){return it.p.eta;})[0]||{p:{}}).p.eta||'';
+    batchLate=!!batchEta&&batchEta<today()&&prog.received<prog.total;
+    infoParts.push(batchEta?'due '+fmtShortDate(batchEta):'no arrival date');
   }else{
     var totalQty=items.reduce(function(s,it){return s+(it.p.qty||0);},0);
     var specialCount=items.filter(function(it){return it.p.special;}).length;
@@ -2859,6 +3241,10 @@ function buildVendorCard(v,batchId,items){
     infoSpan.textContent=infoParts.join(' · ');
     hdrLeft.appendChild(infoSpan);
   }
+  if(batchLate){
+    var lateTag=document.createElement('span');lateTag.style.cssText='font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:2px 7px;border-radius:3px';
+    lateTag.textContent='LATE';hdrLeft.appendChild(lateTag);
+  }
   var caret=document.createElement('span');caret.textContent=collapsed?'▸':'▾';caret.style.cssText='font-size:12px;color:var(--muted);flex-shrink:0';
   hdrRow.appendChild(hdrLeft);hdrRow.appendChild(caret);
   hdrRow.onclick=function(){_poCollapsed[key]=collapsed?false:true;renderPartOrders();};
@@ -2868,10 +3254,18 @@ function buildVendorCard(v,batchId,items){
     var bRecAll=document.createElement('button');bRecAll.className='btn sm';bRecAll.textContent='Select All → Received';
     bRecAll.onclick=function(){selectAllReceive(v,batchId);};
     actions.appendChild(bRecAll);
+    var etaLbl=document.createElement('label');etaLbl.style.cssText='display:flex;align-items:center;gap:5px;font-size:12px;color:var(--gray2);white-space:nowrap';
+    var etaIn=document.createElement('input');etaIn.type='date';etaIn.style.cssText='padding:4px 6px;border:1.5px solid var(--silver);border-radius:3px;font-size:12px;font-family:Barlow,sans-serif;background:var(--white);color:var(--dark)';
+    etaLbl.appendChild(document.createTextNode(batchId?'Expected arrival:':'Expected arrival (optional):'));etaLbl.appendChild(etaIn);
     if(!batchId){
       var bClose=document.createElement('button');bClose.className='btn sm primary';bClose.textContent='✓ Mark Ordered — Close This List';
-      bClose.onclick=function(){closeVendorCart(v);};
+      bClose.onclick=function(){closeVendorCart(v,etaIn.value);};
+      actions.appendChild(etaLbl);
       actions.appendChild(bClose);
+    }else{
+      etaIn.value=batchEta;
+      etaIn.onchange=function(){setBatchEta(batchId,etaIn.value);};
+      actions.appendChild(etaLbl);
     }
     var bDl=document.createElement('button');bDl.className='btn sm';bDl.textContent='⬇ Download List';
     bDl.onclick=function(){downloadPartsOrderList(v,batchId,items.map(function(it){return it.p;}));};
@@ -2908,14 +3302,23 @@ function buildVendorCard(v,batchId,items){
   }
   return card;
 }
-function closeVendorCart(v){
-  if(!confirm('Mark this list as Ordered? New parts added for '+(v||'this vendor')+' will start a fresh list.'))return;
+function closeVendorCart(v,eta){
+  if(!confirm('Mark this list as Ordered? New parts added for '+(v||'this vendor')+' will start a fresh list.'+(eta?'':'\n\nTip: add an expected arrival date so the shop knows when these parts are due.')))return;
   var bid='b'+Date.now(),dt=today();
   ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p){
     if(p.received||p.batchId)return;
     if(!partLocMatches(p))return;
     if(vendorKeyFor(cat,p)!==v)return;
-    p.batchId=bid;p.batchOrderedAt=dt;p.ordered=true;
+    p.batchId=bid;p.batchOrderedAt=dt;p.ordered=true;p.eta=eta||'';
+  });});
+  writePartOrders();renderPartOrders();
+}
+function setBatchEta(batchId,eta){
+  if(!batchId)return;
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p){
+    if(p.batchId!==batchId)return;
+    if(!partLocMatches(p))return;
+    p.eta=eta||'';
   });});
   writePartOrders();renderPartOrders();
 }
@@ -3057,7 +3460,7 @@ function buildPORow(cat,i,p){
         btns.appendChild(vSel);
       }
       if(p.batchId){
-        var bTag=document.createElement('span');bTag.style.cssText='font-size:11px;color:var(--muted);white-space:nowrap';bTag.textContent='Ordered '+(p.batchOrderedAt||'');
+        var bTag=document.createElement('span');bTag.style.cssText='font-size:11px;color:var(--muted);white-space:nowrap';bTag.textContent='Ordered '+(p.batchOrderedAt||'')+(p.eta&&!p.received?' · due '+fmtShortDate(p.eta):'');if(partEtaLate(p)){bTag.style.color='var(--red)';bTag.style.fontWeight='700';bTag.textContent+=' LATE';}
         btns.appendChild(bTag);
       }else{
         var bOrd=document.createElement('button');
@@ -3094,6 +3497,7 @@ function loadAgeInputs(){
   if(w)w.value=SETTINGS.ageWarnDays;
   if(o)o.value=SETTINGS.ageOldDays;
   loadTrackerToggle();
+  renderStageLimits();renderBoard();
 }
 
 function renderDaily(){
@@ -3109,6 +3513,7 @@ function renderDaily(){
   var poCut=new Date();poCut.setDate(poCut.getDate()-7);var poCutStr=poCut.toISOString().slice(0,10);
   ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){if(p.received&&p.receivedOn&&p.receivedOn>=poCutStr)partsIn.push({cat:cat,idx:i,p:p});});});
   var waiting=open.filter(function(o){return o.status==='Waiting on Parts';});
+  var custWait=open.filter(function(o){return o.status==='Waiting on Customer';});
 
   el.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Pickup &amp; Report — '+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+'</div>';
 
@@ -3197,13 +3602,34 @@ function renderDaily(){
     return row;
   });
 
-  // Waiting on parts
+  // Waiting on parts, with when the parts are due (from the vendor list's expected arrival date)
   makeSection(grid,'Waiting on Parts','',waiting,function(o){
     var c=CUSTS[o.custId]||{};
     var row=document.createElement('div');
     row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off);cursor:pointer';
-    row.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')
+    var e=woPartsEta(o.id),etaHtml='';
+    if(e&&e.eta)etaHtml=e.late?'<span style="font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:1px 6px;border-radius:2px;margin-left:6px">LATE &mdash; was due '+fmtShortDate(e.eta)+'</span>':'<span style="font-size:11px;font-weight:700;color:#2d7d1e;margin-left:6px">Due '+fmtShortDate(e.eta)+'</span>';
+    else if(e&&e.unknown)etaHtml='<span style="font-size:11px;color:var(--muted);margin-left:6px">no arrival date yet</span>';
+    row.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')+etaHtml
       +(o.partsWaiting?'<div style="font-size:12px;color:var(--muted)">'+o.partsWaiting+'</div>':'');
+    row.onclick=function(){openDet(o.id);};
+    return row;
+  });
+
+  // Waiting on customer: diagnosed, needs the customer OK before work continues
+  makeSection(grid,'Waiting on Customer OK','#7B4FC0',custWait,function(o){
+    var c=CUSTS[o.custId]||{};
+    var row=document.createElement('div');
+    row.style.cssText='padding:6px 0;border-bottom:1px solid var(--off);cursor:pointer';
+    var d=stageDays(o);
+    row.innerHTML='<strong>#'+o.woNum+'</strong> '+(c.first||'')+' '+(c.last||'')+' — '+(o.brand||'')+' '+(o.equipType||'')
+      +(d!==null?'<span style="font-size:11px;margin-left:6px;'+(stageLate(o)?'color:var(--red);font-weight:700':'color:var(--muted)')+'">waiting '+(d===0?'since today':d+' day'+(d!==1?'s':''))+'</span>':'')
+      +(c.phone?'<div><a href="tel:'+c.phone+'" onclick="event.stopPropagation()" style="color:var(--red);font-weight:700;font-size:13px;text-decoration:none">&#128222; '+c.phone+'</a></div>':'');
+    if(c.phone){
+      var tb=document.createElement('button');tb.className='btn sm success';tb.textContent='📱 Text Customer';tb.style.marginTop='4px';
+      tb.onclick=function(ev){ev.stopPropagation();textCustomer(o.id);};
+      row.appendChild(tb);
+    }
     row.onclick=function(){openDet(o.id);};
     return row;
   });
@@ -3215,6 +3641,8 @@ function textCustomer(id){
   var shopPhone=o.location==='Harrison'?'(870) 741-3493':'(870) 449-5234';
   var msg=o.status==='Ready'
     ?'Hi '+(c.first||'there')+', your '+(o.brand?o.brand+' ':'')+o.equipType+' is ready for pickup at Miller Hardware! Give us a call at '+shopPhone+' if you have any questions.'
+    :o.status==='Waiting on Customer'
+    ?'Hi '+(c.first||'there')+', this is Miller Hardware. We have finished looking over your '+(o.brand?o.brand+' ':'')+o.equipType+' and need your OK before we go ahead with the repair. Please call us at '+shopPhone+' or reply to this text.'
     :'Hi '+(c.first||'there')+', this is Miller Hardware reaching out about your '+(o.brand?o.brand+' ':'')+o.equipType+'. Give us a call at '+shopPhone+'.';
   if(SETTINGS.trackerOn!==false){msg+=' Track your repair here: '+trackerLink(id);}
   var a=document.createElement('a');
@@ -3250,7 +3678,8 @@ function renderTracker(o,c){
   var page=document.getElementById('tracker-page');if(!page)return;
   var steps=['Intake','Diagnosing','In Repair','Waiting on Parts','Ready','Picked Up'];
   var labels=['Received','Diagnosing','In Repair','Waiting on Parts','Ready for Pickup','Picked Up'];
-  var cur=steps.indexOf(o.status||'Intake');if(cur<0)cur=0;
+  var needsOk=o.status==='Waiting on Customer';
+  var cur=needsOk?steps.indexOf('Diagnosing'):steps.indexOf(o.status||'Intake');if(cur<0)cur=0;
   var isHarrison=o.location==='Harrison';
   var shopPhone=isHarrison?'(870) 741-3493':'(870) 449-5234';
   var townLine=isHarrison?'Harrison':'Yellville';
@@ -3268,6 +3697,8 @@ function renderTracker(o,c){
   }).join('');
   var midHtml=ready
     ?'<div style="background:#eaf7e4;border:1.5px solid #2d7d1e;border-radius:8px;padding:15px 16px;margin-top:16px;text-align:center"><div style="font-size:18px;font-weight:800;color:#1a5c0a">&#9989; Ready for pickup!</div><div style="font-size:14px;color:#2d5c1a;margin-top:3px">Come by our '+townLine+' store when you get a chance.</div></div>'
+    :needsOk
+    ?'<div style="background:#f3edfb;border:1.5px solid #7B4FC0;border-radius:8px;padding:15px 16px;margin-top:16px;text-align:center"><div style="font-size:18px;font-weight:800;color:#4B2A7B">We need your OK</div><div style="font-size:14px;color:#4B2A7B;margin-top:3px">We have looked over your equipment and need to go over the repair with you before we continue. Please give us a call.</div></div>'
     :(o.estDate?'<div style="text-align:center;font-size:14px;color:#555;margin-top:16px">Estimated ready date: <strong>'+o.estDate+'</strong></div>':'');
   page.innerHTML='<div style="max-width:470px;margin:0 auto;padding:26px 20px 50px;font-family:Barlow,sans-serif;color:#1a1a1a">'
     +'<div style="text-align:center"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:27px;letter-spacing:.02em">MILLER HARDWARE</div><div style="font-size:12px;color:#888;letter-spacing:.1em;text-transform:uppercase">Saw Shop &middot; Repair Status</div></div>'
