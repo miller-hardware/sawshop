@@ -542,6 +542,11 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div id="stale-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
     </div>
     <div class="card">
+      <div class="card-hdr">&#9986; Part Names That May Have Been Cut Off</div>
+      <div style="font-size:13px;color:var(--gray2);margin-bottom:8px">Until Sept 2026, editing a job could chop a part name at an inch mark &mdash; <strong>18&quot; chain</strong> was saved as just <strong>18</strong>. These parts have a name that is only a number. Tap <strong>View</strong>, then <strong>Edit</strong> to fix the name. (The rest of the name cannot be recovered automatically.)</div>
+      <div id="trunc-parts-box"><div class="empty" style="padding:6px 0">Checking...</div></div>
+    </div>
+    <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div class="card-hdr" style="margin-bottom:0">&#128202; This Week&rsquo;s Snapshot</div>
         <button class="btn sm" onclick="printWeeklySnapshot()">Print</button>
@@ -1022,6 +1027,7 @@ function quickChip(o){return o.quick?'<span class="chip-quick" title="Quick job 
 function setStatus(o,s){if(o.status!==s){o.status=s;o.statusTs=Date.now();}}
 function setSP(st,t){var p=document.getElementById('sync-pill');p.className='sync-pill '+st;p.querySelector('.dot').className='dot '+(st==='ok'?'g':st==='err'?'r':'a');document.getElementById('sync-txt').textContent=t;}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
 function warrantyStatus(expDate){if(!expDate)return null;var exp=new Date(expDate),now=new Date(),diff=Math.round((exp-now)/(1000*60*60*24));if(diff<0)return{label:'Warranty expired',cls:'b-warranty-exp'};if(diff<=30)return{label:'Expires in '+diff+'d',cls:'b-warranty-soon'};return{label:'Under warranty',cls:'b-warranty'};}
@@ -1155,12 +1161,19 @@ function renderReminders(){
       +'</div></div></div>';
   }).join('');
 }
+function shopPhoneFor(loc){return loc==='Harrison'?'(870) 741-3493':'(870) 449-5234';}
+// A customer's store = the location of their most recent work order; falls back to this device's store.
+function custHomeStore(custId){
+  var best=null;
+  Object.keys(ORDERS).forEach(function(k){var o=ORDERS[k];if(o.custId!==custId||!o.location)return;if(!best||(o.dateIn||'')>(best.dateIn||''))best=o;});
+  return best?best.location:defaultLocation();
+}
 function textReminder(custId,eqIdx,type){
   var c=CUSTS[custId];if(!c){alert('Customer not found.');return;}
   if(!c.phone){alert('No phone number on file for this customer.');return;}
   var eq=custEquip(custId)[eqIdx]||{};
   var equipName=[eq.brand,eq.type].filter(Boolean).join(' ')||'equipment';
-  var shopPhone='(870) 449-5234';
+  var shopPhone=shopPhoneFor(custHomeStore(custId));
   var first=c.first||'there';
   var msg;
   if(type==='warranty'){
@@ -1336,8 +1349,8 @@ function writeContactLogs(woid,logs){if(DB){DB.ref('contactlogs/'+woid).set(logs
 function writePartOrders(){if(DB){DB.ref('partorders').set(PARTORDERS);}else{saveLocal();}}
 
 function addTech(){var n=document.getElementById('new-tech').value.trim();if(!n||TECHS.indexOf(n)>=0)return;TECHS.push(n);writeTechs();renderTechs();populateTechSels();document.getElementById('new-tech').value='';}
-function removeTech(n){dangerConfirm('Remove technician?','Remove '+n+' from the technician list?\n\nTheir open jobs will show under Unassigned on Shop Load.','Yes, remove',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();renderBoard();});}
-function renderTechs(){var el=document.getElementById('tech-chips');if(!el)return;el.innerHTML=TECHS.map(function(t){return '<span class="tech-chip">'+t+'<button onclick="removeTech(\''+t+'\')">&#x2715;</button></span>';}).join('');}
+function removeTech(n){dangerConfirm('Remove technician?','Remove '+n+' from the technician list?\n\nTheir open jobs will move to the Unassigned column on Shop Load (tagged with their name) until you reassign them.','Yes, remove',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();renderBoard();});}
+function renderTechs(){var el=document.getElementById('tech-chips');if(!el)return;el.innerHTML='';TECHS.forEach(function(t){var chip=document.createElement('span');chip.className='tech-chip';chip.appendChild(document.createTextNode(t));var btn=document.createElement('button');btn.innerHTML='&#x2715;';btn.onclick=function(){removeTech(t);};chip.appendChild(btn);el.appendChild(chip);});}
 
 function writeVendors(){if(DB){DB.ref('vendors').set(VENDORS);}else{saveLocal();}}
 function addVendor(){var n=document.getElementById('new-vendor').value.trim();if(!n||VENDORS.indexOf(n)>=0)return;VENDORS.push(n);writeVendors();renderVendors();renderPartOrders();document.getElementById('new-vendor').value='';}
@@ -1459,6 +1472,24 @@ function renderStaleOrders(){
     ids.forEach(function(id){var o=ORDERS[id];if(!o)return;setStatus(o,'Picked Up');o.partsWaiting='';o.staleClosed=today();writeOrder(o);});
     setTimeout(renderStaleOrders,400);
   };
+}
+// Parts whose whole description is just a number: the fingerprint of the old inch-mark bug (18" chain -> "18").
+function renderTruncatedParts(){
+  var el=document.getElementById('trunc-parts-box');if(!el)return;
+  var hits=[];
+  orderArr().forEach(function(o){(o.parts||[]).forEach(function(p){if(/^\s*\d{1,3}(\.\d+)?\s*$/.test(p.desc||''))hits.push({o:o,p:p});});});
+  if(!hits.length){el.innerHTML='<div class="empty" style="padding:6px 0">None found. &#10003;</div>';return;}
+  el.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:6px">'+hits.length+' part'+(hits.length!==1?'s':'')+' to check:</div>';
+  var box=document.createElement('div');box.style.cssText='max-height:300px;overflow:auto;border:1px solid var(--silver);border-radius:3px';
+  hits.forEach(function(h){
+    var c=CUSTS[h.o.custId]||{};
+    var row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--off);font-size:12px';
+    var info=document.createElement('div');
+    info.innerHTML='<strong>WO #'+h.o.woNum+'</strong> '+escHtml(((c.first||'')+' '+(c.last||'')).trim())+' &mdash; '+escHtml([h.o.brand,h.o.equipType].filter(Boolean).join(' '))+' &middot; part: <strong>&ldquo;'+escHtml(h.p.desc)+'&rdquo;</strong>'+(h.p.pn?' <span style="font-family:monospace;color:var(--muted)">'+escHtml(h.p.pn)+'</span>':'');
+    var v=document.createElement('button');v.className='btn sm';v.textContent='View';v.onclick=function(){openDet(h.o.id);};
+    row.appendChild(info);row.appendChild(v);box.appendChild(row);
+  });
+  el.appendChild(box);
 }
 function printWeeklySnapshot(){var pa=document.getElementById('print-area');pa.innerHTML=weeklySnapshotHTML(true);pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 // ── One-time catch-up: log equipment from existing work order history (owner-only, preview-then-apply) ──
@@ -1680,6 +1711,9 @@ function mergeCustomers(keepId,loseId){
   updates['customers/'+keepId]=merged;
   updates['customers/'+loseId]=null;
   ordersToMove.forEach(function(k){updates['orders/'+k+'/custId']=keepId;});
+  // Rental reservations + waitlist entries follow the customer too, so none are left pointing at the deleted record.
+  Object.keys(RENTAL_BOOKINGS).forEach(function(k){if(RENTAL_BOOKINGS[k].custId===loseId)updates['rental_bookings/'+k+'/custId']=keepId;});
+  Object.keys(RENTAL_WAITLIST).forEach(function(k){if(RENTAL_WAITLIST[k].custId===loseId)updates['rental_waitlist/'+k+'/custId']=keepId;});
   if(mergedEquip.length)updates['equipment/'+keepId]=mergedEquip;
   updates['equipment/'+loseId]=null;
   DB.ref().update(updates).then(function(){
@@ -1701,7 +1735,7 @@ function showTab(t){
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='daily')renderDaily();
   if(t==='parts')renderPartOrders();
-  if(t==='settings'){renderInstallBox();renderStageLimits();renderStaleOrders();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}
+  if(t==='settings'){renderInstallBox();renderStageLimits();renderStaleOrders();renderTruncatedParts();renderDupCustomers();renderWeeklySnapshot();renderCustomerCleanup();renderBrandCleanup();renderEquipmentBackfill();}
 }
 
 function toggleWaitingRow(){document.getElementById('waiting-parts-row').style.display=document.getElementById('m-status').value==='Waiting on Parts'?'block':'none';}
@@ -1725,14 +1759,15 @@ function renderBoard(){
   var allTechs=['Unassigned'].concat(TECHS);
   el.innerHTML=allTechs.map(function(tech){
     // Quick jobs keep their place in line (urgent first, then date in); they just carry a ⚡ Quick label.
-    var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;});
+    // A job whose tech was removed from the list lands under Unassigned (with a "was: name" tag) instead of vanishing.
+    var jobs=open.filter(function(o){var t=o.tech&&TECHS.indexOf(o.tech)>=0?o.tech:'Unassigned';return t===tech;});
     var overloaded=jobs.length>=4;
     var cards=jobs.length?jobs.map(function(o){
       var c=CUSTS[o.custId]||{};var isWaiting=o.status==='Waiting on Parts',isCust=o.status==='Waiting on Customer';
       return '<div class="board-card'+(o.urgent?' urgent':isWaiting?' waiting':isCust?' custwait':'')+'" onclick="openDet(\''+o.id+'\')">'
         +'<div class="bc-wo">#'+o.woNum+'</div><div class="bc-cust">'+(c.first||'')+' '+(c.last||'')+'</div>'
         +'<div class="bc-equip">'+(o.brand||'')+' '+(o.equipType||'')+(o.model?' — '+o.model:'')+'</div>'
-        +'<div class="bc-meta">'+badge(o.status||'Intake')+stageAgeChip(o)+quickChip(o)+authChip(o)+(o.urgent?'<span class="badge b-urgent">!</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
+        +'<div class="bc-meta">'+badge(o.status||'Intake')+(o.tech&&o.tech!=='Unassigned'&&TECHS.indexOf(o.tech)<0?'<span class="stage-age" title="This tech is no longer on the tech list - reassign in Edit">was: '+escHtml(o.tech)+'</span>':'')+stageAgeChip(o)+quickChip(o)+authChip(o)+(o.urgent?'<span class="badge b-urgent">!</span>':'')+(o.location?'<span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--off);padding:2px 6px;border-radius:2px;border:1px solid var(--silver)">'+o.location+'</span>':'')+'</div>'
         +'</div>';
     }).join(''):'<div class="board-empty">No open orders</div>';
     return '<div class="board-col"><div class="board-col-hdr'+(overloaded?' overloaded':'')+'"><span>'+tech+'</span><span class="col-count">'+jobs.length+'</span></div><div class="board-col-body">'+cards+'</div></div>';
@@ -1893,7 +1928,8 @@ function openEditWO(id){
 function quickStatus(id,s){var o=ORDERS[id];if(!o)return;setStatus(o,s);if(s!=='Waiting on Parts')o.partsWaiting='';writeOrder(o);openDet(id);}
 
 function addPRow(){appPR({desc:'',qty:1,note:''});}
-function appPR(p){var tr=document.createElement('tr');tr.setAttribute('data-pn',p.pn||'');var si='border:1.5px solid var(--silver);border-radius:3px;padding:4px 6px;font-size:12px;background:var(--white);color:var(--dark);width:100%;font-family:Barlow,sans-serif';tr.innerHTML='<td style="width:40%"><input type="text" value="'+(p.desc||'')+'" placeholder="e.g. Air filter, Labor — rebuild" style="'+si+'"></td><td style="width:12%"><input type="number" value="'+(p.qty||1)+'" min="1" style="'+si+'"></td><td style="display:flex;gap:4px;padding:0"><input type="text" value="'+(p.note||'')+'" placeholder="Optional notes..." style="'+si+';flex:1"><button class="btn sm del" onclick="this.closest(\'tr\').remove()" style="padding:3px 7px;flex-shrink:0">&#x2715;</button></td>';document.getElementById('pt-body').appendChild(tr);}
+// Values are set as DOM properties (never pasted into HTML) so inch marks like 18" chain survive an edit + save.
+function appPR(p){var tr=document.createElement('tr');tr.setAttribute('data-pn',p.pn||'');var si='border:1.5px solid var(--silver);border-radius:3px;padding:4px 6px;font-size:12px;background:var(--white);color:var(--dark);width:100%;font-family:Barlow,sans-serif';tr.innerHTML='<td style="width:40%"><input type="text" placeholder="e.g. Air filter, Labor — rebuild" style="'+si+'"></td><td style="width:12%"><input type="number" min="1" style="'+si+'"></td><td style="display:flex;gap:4px;padding:0"><input type="text" placeholder="Optional notes..." style="'+si+';flex:1"><button class="btn sm del" onclick="this.closest(\'tr\').remove()" style="padding:3px 7px;flex-shrink:0">&#x2715;</button></td>';var ins=tr.querySelectorAll('input');ins[0].value=p.desc||'';ins[1].value=p.qty||1;ins[2].value=p.note||'';document.getElementById('pt-body').appendChild(tr);}
 function getParts(){var parts=[];document.querySelectorAll('#pt-body tr').forEach(function(r){var ins=r.querySelectorAll('input');if(ins[0]&&ins[0].value.trim())parts.push({pn:r.getAttribute('data-pn')||'',desc:ins[0].value,qty:parseFloat(ins[1].value)||1,note:ins[2]?ins[2].value:''});});return parts;}
 
 function saveWO(){
@@ -2048,8 +2084,10 @@ function delRentalUnit(){
 function getBookingsForUnit(unitId){return Object.values(RENTAL_BOOKINGS).filter(function(b){return b.unitId===unitId;}).sort(function(a,b){return a.start.localeCompare(b.start);});}
 function getWaitlistForUnit(unitId){return Object.values(RENTAL_WAITLIST).filter(function(w){return w.unitId===unitId;}).sort(function(a,b){return a.desiredStart.localeCompare(b.desiredStart);});}
 function rangesOverlap(aStart,aEnd,bStart,bEnd){return aStart<=bEnd&&bStart<=aEnd;}
+// A booking that has been checked back in no longer holds the unit.
+function bookingActive(b){return (b.status||'reserved')!=='returned';}
 function findConflict(unitId,start,end){
-  return getBookingsForUnit(unitId).find(function(b){return rangesOverlap(start,end,b.start,b.end);})||null;
+  return getBookingsForUnit(unitId).filter(bookingActive).find(function(b){return rangesOverlap(start,end,b.start,b.end);})||null;
 }
 function writeRentalBooking(b){if(DB){DB.ref('rental_bookings/'+b.id).set(b);}else{RENTAL_BOOKINGS[b.id]=b;renderRentalCalendar();}}
 function cancelReservation(id){
@@ -2173,7 +2211,7 @@ function renderRentalCalendar(){
   var year=_rentalCalYear,month=_rentalCalMonth;
   var first=new Date(year,month,1),startDow=first.getDay(),daysInMonth=new Date(year,month+1,0).getDate();
   var monthName=first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  function isBooked(dateStr){return bookings.some(function(b){return dateStr>=b.start&&dateStr<=b.end;});}
+  function isBooked(dateStr){return bookings.some(function(b){return bookingActive(b)&&dateStr>=b.start&&dateStr<=b.end;});}
   var cells='';
   for(var i=0;i<startDow;i++)cells+='<div></div>';
   for(var d=1;d<=daysInMonth;d++){
@@ -2214,7 +2252,7 @@ function openRentalInspect(bookingId,kind){
   var u=RENTAL_UNITS[b.unitId]||{},c=CUSTS[b.custId]||{};
   _rinspBookingId=bookingId;_rinspKind=kind;_rsigHasInk=false;
   document.getElementById('rental-inspect-title').textContent=(kind==='checkout'?'Check Out — ':'Check In — ')+(u.sku||'')+' '+[(u.brand||''),(u.type||'')].filter(Boolean).join(' ');
-  document.getElementById('rental-inspect-sub').textContent=((c.first||'')+' '+(c.last||'')).trim()+' &middot; '+b.start+' &rarr; '+b.end;
+  document.getElementById('rental-inspect-sub').textContent=((c.first||'')+' '+(c.last||'')).trim()+' · '+b.start+' → '+b.end;
   var items=getChecklistForType(u.type);
   document.getElementById('rental-inspect-checklist').innerHTML=items.map(function(item,i){
     return '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="rinsp-item-'+i+'" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0"> '+item+'</label>';
@@ -2626,18 +2664,26 @@ function printWO(id){
   setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},100);
 }
 
+// Standard CSV cell: always quoted, inner quotes doubled — so commas, quotes (18" chain) and line breaks stay in their column.
+function csvCell(v){if(v===null||v===undefined)v='';return '"'+String(v).replace(/"/g,'""')+'"';}
 function exportCSV(type){
   var rows,fn;
-  if(type==='orders'){rows=[['WO#','Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Hours','Status','Parts Waiting','Tech','Date In','Est Date','Date Out','Urgent','Est Hrs','Actual Hrs','Billed Hrs','Complaint','Notes']];orderArr().forEach(function(o){var c=CUSTS[o.custId]||{};rows.push([o.woNum,(c.first||'')+' '+(c.last||''),c.phone||'',o.equipType||'',o.brand||'',o.year||'',o.model||'',o.serial||'',o.engine||'',o.hours||'',o.status||'',o.partsWaiting||'',o.tech||'',o.dateIn||'',o.estDate||'',o.dateOut||'',o.urgent?'Yes':'No',o.estHrs||'',o.actHrs||'',o.billHrs||'','"'+(o.complaint||'').replace(/"/g,"''")+'"','"'+(o.notes||'').replace(/"/g,"''")+'"']);});fn='sawshop-orders-'+today()+'.csv';}
-  else if(type==='customers'){rows=[['First','Last','Phone','Email','Address','Notes']];custArr().forEach(function(c){rows.push([c.first||'',c.last||'',c.phone||'',c.email||'',c.addr||'','"'+(c.notes||'').replace(/"/g,"''")+'"']);});fn='sawshop-customers-'+today()+'.csv';}
-  else if(type==='equipment'){rows=[['Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Date','Record Type','Warranty Exp','Warranty Notes','Notes']];custArr().forEach(function(c){custEquip(c.id).forEach(function(e){rows.push([(c.first||'')+' '+(c.last||''),c.phone||'',e.type||'',e.brand||'',e.year||'',e.model||'',e.serial||'',e.engine||'',e.date||'',e.rectype||'sale',e.warrantyExp||'',e.warrantyNotes||'','"'+(e.notes||'').replace(/"/g,"''")+'"']);});});fn='sawshop-equipment-'+today()+'.csv';}
-  else{rows=[['Customer','Phone','Equipment','Type','Detail','Last Service']];buildReminders().forEach(function(r){rows.push([r.custName,r.phone,r.equip,r.type,r.detail.replace(/<[^>]*>/g,''),r.lastSvc||'']);});fn='sawshop-reminders-'+today()+'.csv';}
-  var csv=rows.map(function(r){return r.join(',');}).join('\
-');
+  if(type==='orders'){rows=[['WO#','Location','Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Hours / Condition','Status','Parts Waiting','Tech','Date In','Est Date','Date Out','Urgent','Quick Job','Approved Up To $','Parts','Complaint','Notes']];orderArr().forEach(function(o){var c=CUSTS[o.custId]||{};rows.push([o.woNum,o.location||'Yellville',(c.first||'')+' '+(c.last||''),c.phone||'',o.equipType||'',o.brand||'',o.year||'',o.model||'',o.serial||'',o.engine||'',o.hours||'',o.status||'',o.partsWaiting||'',o.tech||'',o.dateIn||'',o.estDate||'',o.dateOut||'',o.urgent?'Yes':'No',o.quick?'Yes':'No',o.authAmt||'',(o.parts||[]).map(function(p){return (p.pn?p.pn+' ':'')+(p.desc||'')+(p.qty>1?' x'+p.qty:'');}).join('; '),o.complaint||'',o.notes||'']);});fn='sawshop-orders-'+today()+'.csv';}
+  else if(type==='customers'){rows=[['First','Last','Phone','Email','Address','Notes']];custArr().forEach(function(c){rows.push([c.first||'',c.last||'',c.phone||'',c.email||'',c.addr||'',c.notes||'']);});fn='sawshop-customers-'+today()+'.csv';}
+  else if(type==='equipment'){rows=[['Customer','Phone','Type','Brand','Year','Model','Serial','Engine','Date','Record Type','Warranty Exp','Warranty Notes','Notes']];custArr().forEach(function(c){custEquip(c.id).forEach(function(e){rows.push([(c.first||'')+' '+(c.last||''),c.phone||'',e.type||'',e.brand||'',e.year||'',e.model||'',e.serial||'',e.engine||'',e.date||'',e.rectype||'sale',e.warrantyExp||'',e.warrantyNotes||'',e.notes||'']);});});fn='sawshop-equipment-'+today()+'.csv';}
+  else{rows=[['Customer','Phone','Equipment','Type','Detail','Last Service']];buildReminders().forEach(function(r){rows.push([r.custName,r.phone,r.equip,r.type,(r.detail||'').replace(/<[^>]*>/g,'').replace(/&middot;/g,'-'),r.lastSvc||'']);});fn='sawshop-reminders-'+today()+'.csv';}
+  var csv='﻿'+rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n');
   dl('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),fn);
 }
-function exportJSON(){dl('data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({exported:new Date().toISOString(),orders:ORDERS,customers:CUSTS,techs:TECHS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,svcIntervals:SVC_INTERVALS},null,2)),'sawshop-backup-'+today()+'.json');}
-function dl(href,name){var a=document.createElement('a');a.href=href;a.download=name;a.click();}
+// Full backup = every saw shop data section, including ones not kept in memory (signatures are fetched just for the backup).
+function exportJSON(){
+  var data={exported:new Date().toISOString(),orders:ORDERS,customers:CUSTS,techs:TECHS,vendors:VENDORS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,partorders:PARTORDERS,settings:SETTINGS,svcIntervals:SVC_INTERVALS,rental_units:RENTAL_UNITS,rental_bookings:RENTAL_BOOKINGS,rental_waitlist:RENTAL_WAITLIST};
+  function save(){var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob);dl(url,'sawshop-backup-'+today()+'.json');setTimeout(function(){URL.revokeObjectURL(url);},4000);}
+  if(!DB){save();return;}
+  DB.ref('signatures').once('value').then(function(s){data.signatures=s.val()||{};save();})
+    .catch(function(e){data.signatures_error='Could not include signatures: '+e.message;save();});
+}
+function dl(href,name){var a=document.createElement('a');a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove();}
 function saveFB(){var raw=document.getElementById('fb-cfg').value.trim();if(!raw)return;dangerConfirm('Change database connection?','This points THIS device at a different Firebase database. A wrong config will make the app stop showing shop data on this device until it is cleared.\n\nOnly do this if Mike asked you to.','Yes, change it',function(){saveFBNow(raw);});}
 function saveFBNow(raw){try{var cl=raw.replace(/(\w+)\s*:/g,'"$1":').replace(/'/g,'"');if(cl.indexOf('{')!==0)cl=cl.substring(cl.indexOf('{'));JSON.parse(cl);}catch(e){document.getElementById('fb-msg').textContent='Could not parse config.';return;}localStorage.setItem('fb_config_raw',raw);document.getElementById('fb-msg').style.color='#1a5c0a';document.getElementById('fb-msg').textContent='Saved — reload to connect.';}
 function clearFB(){localStorage.removeItem('fb_config_raw');document.getElementById('fb-cfg').value='';document.getElementById('fb-msg').textContent='Cleared.';}
@@ -3089,9 +3135,23 @@ function quickAddNote(woid){
 function deletePart(woid,idx){
   var o=ORDERS[woid];if(!o)return;
   var pp=(o.parts||[])[idx]||{};
-  dangerConfirm('Remove part?','Remove "'+((pp.pn?pp.pn+' ':'')+(pp.desc||'this part'))+'" from work order #'+o.woNum+'?','Yes, remove it',function(){
+  // Find the matching Parts to Order line for this job (same WO, same part #/description, not received yet).
+  var link=null;
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p,i){
+    if(link||p.received||p.woId!==woid)return;
+    if((p.desc||'')===(pp.desc||'')&&(p.pn||'')===(pp.pn||''))link={cat:cat,p:p};
+  });});
+  var extra='';
+  if(link&&!link.p.batchId&&!link.p.ordered)extra='\n\nIt will also be taken off the Parts to Order list, since it has not been ordered yet.';
+  else if(link)extra='\n\nHEADS UP: this part was already ordered'+(link.p.vendor?' from '+link.p.vendor:'')+(link.p.batchOrderedAt?' on '+link.p.batchOrderedAt:'')+'. It stays on the Parts to Order list. Cancel it with the vendor if you do not need it.';
+  dangerConfirm('Remove part?','Remove "'+((pp.pn?pp.pn+' ':'')+(pp.desc||'this part'))+'" from work order #'+o.woNum+'?'+extra,'Yes, remove it',function(){
   var parts=(o.parts||[]).slice();parts.splice(idx,1);
-  o.parts=parts;writeOrder(o);openDet(woid);
+  o.parts=parts;writeOrder(o);
+  if(link&&!link.p.batchId&&!link.p.ordered){
+    var arr=PARTORDERS[link.cat]||[],at=arr.indexOf(link.p);   // look it up by object, not a saved position
+    if(at>=0){arr.splice(at,1);writePartOrders();renderPartOrders();}
+  }
+  openDet(woid);
   });
 }
 function openPartOrder(preSpecial){
