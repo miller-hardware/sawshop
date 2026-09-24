@@ -703,7 +703,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <div class="mfoot">
     <button class="btn" onclick="closeM('wo-modal')">Cancel</button>
     <button class="btn del sm" id="wo-del-btn" onclick="delWO()" style="display:none">Delete</button>
-    <button class="btn primary" onclick="saveWO()">Save Work Order</button>
+    <button class="btn primary" id="wo-save-btn" onclick="saveWO()">Save Work Order</button>
   </div>
 </div>
 </div>
@@ -1263,9 +1263,20 @@ function startDataSync(){
   DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});renderReminders();});
   DB.ref('attachments').on('value',function(s){ATTACHMENTS={};s.forEach(function(ch){ATTACHMENTS[ch.key]=ch.val();});});
   DB.ref('contactlogs').on('value',function(s){CONTACTLOGS={};s.forEach(function(ch){CONTACTLOGS[ch.key]=ch.val();});});
-  DB.ref('settings').once('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();if(isAdmin())DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);});
+  // Live: a setting changed on one device shows up on every device right away.
+  var _cfgSynced=false;
+  DB.ref('settings').on('value',function(s){var v=s.val();if(v){SETTINGS=Object.assign(SETTINGS,v);}loadAgeInputs();if(!_cfgSynced&&isAdmin()){_cfgSynced=true;DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn!==false);}});
   DB.ref('svcIntervals').on('value',function(s){var v=s.val();if(v){SVC_INTERVALS=Object.assign(SVC_INTERVALS,v);loadIntervalInputs();renderReminders();}});
-  DB.ref('partorders').on('value',function(s){var v=s.val();if(v){PARTORDERS=v;if(!PARTORDERS.stihl)PARTORDERS.stihl=[];if(!PARTORDERS.other)PARTORDERS.other=[];}renderBoard();});
+  DB.ref('partorders').on('value',function(s){
+    var n={stihl:[],other:[]};
+    s.forEach(function(catSnap){
+      var cat=catSnap.key;if(!n[cat])n[cat]=[];
+      catSnap.forEach(function(ch){var v=ch.val();if(!v||typeof v!=='object'||!v.desc)return;v._key=ch.key;n[cat].push(v);});   // skip blanks/ghost lines
+    });
+    PARTORDERS=n;
+    renderBoard();renderPartOrders();
+    var dv=document.getElementById('tab-daily');if(dv&&dv.classList.contains('active'))renderDaily();
+  });
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
   DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
   DB.ref('rental_waitlist').on('value',function(s){RENTAL_WAITLIST={};s.forEach(function(ch){RENTAL_WAITLIST[ch.key]=ch.val();});renderRentalCalendar();});
@@ -1335,7 +1346,35 @@ function loadIntervalInputs(){
   document.getElementById('si-other').value=SVC_INTERVALS.other;
 }
 
-function writeOrder(o){if(DB){DB.ref('orders/'+o.id).set(o);writePublicStatus(o);}else{ORDERS[o.id]=o;saveLocal();refreshAll();}}
+function writeOrder(o){if(DB){DB.ref('orders/'+o.id).set(o);writePublicStatus(o);}else{ORDERS[o.id]=o;saveLocal();refreshAll();}}   // whole record — only for brand-new work orders
+// Save only the listed fields of an existing work order, so someone else's change to a different field is never overwritten.
+function writeOrderFields(o,fields){
+  if(!DB){ORDERS[o.id]=o;saveLocal();refreshAll();return;}
+  var up={};fields.forEach(function(f){var v=o[f];up[f]=(v===undefined?null:v);});
+  DB.ref('orders/'+o.id).update(up);writePublicStatus(o);
+}
+function asArr(v){return !v?[]:(Array.isArray(v)?v.filter(function(x){return x!=null;}):Object.keys(v).map(function(k){return v[k];}).filter(function(x){return x!=null;}));}
+// Add parts to a job safely even if someone else adds parts to the same job at the same moment (both are kept).
+function appendOrderParts(o,newParts){
+  o.parts=asArr(o.parts).concat(newParts);
+  if(!DB){ORDERS[o.id]=o;saveLocal();refreshAll();return;}
+  DB.ref('orders/'+o.id+'/parts').transaction(function(cur){return asArr(cur).concat(newParts);});
+}
+// Remove one part (matched by its contents, not its position) — safe if the list changed on another device meanwhile.
+function samePart(a,b){return (a.pn||'')===(b.pn||'')&&(a.desc||'')===(b.desc||'')&&String(a.qty||'')===String(b.qty||'')&&(a.note||'')===(b.note||'');}
+function removeOrderPart(o,part){
+  var arr=asArr(o.parts);for(var i=0;i<arr.length;i++){if(samePart(arr[i],part)){arr.splice(i,1);break;}}o.parts=arr;
+  if(!DB){ORDERS[o.id]=o;saveLocal();refreshAll();return;}
+  DB.ref('orders/'+o.id+'/parts').transaction(function(cur){var a=asArr(cur);for(var j=0;j<a.length;j++){if(samePart(a[j],part)){a.splice(j,1);break;}}return a;});
+}
+// Append a dated line to a job's notes safely (two people adding notes at once both keep theirs).
+function appendOrderNote(o,line){
+  o.notes=o.notes?(o.notes+'\n'+line):line;
+  o.notesTs=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  if(!DB){ORDERS[o.id]=o;saveLocal();refreshAll();return;}
+  DB.ref('orders/'+o.id+'/notes').transaction(function(cur){return cur?(cur+'\n'+line):line;});
+  DB.ref('orders/'+o.id+'/notesTs').set(o.notesTs);
+}
 function deleteOrder(id){if(DB){DB.ref('orders/'+id).remove();DB.ref('public_status/'+id).remove();}else{delete ORDERS[id];saveLocal();refreshAll();}}
 // Public status mirror — only non-sensitive fields (first name, equipment, status); feeds the customer tracker so real customer data can stay locked.
 function publicStatusFor(o){var c=CUSTS[o.custId]||{};return {woNum:o.woNum||null,first:(c.first||'').trim().split(/\s+/)[0]||'',equip:[o.brand,o.equipType].filter(Boolean).join(' '),status:o.status||'Intake',estDate:o.estDate||'',location:o.location||'Yellville',updated:Date.now()};}
@@ -1346,7 +1385,40 @@ function writeTechs(){if(DB){DB.ref('techs').set(TECHS);}else{saveLocal();}}
 function writeEquipment(cid,eq){if(DB){DB.ref('equipment/'+cid).set(eq);}else{EQUIPMENT[cid]=eq;saveLocal();renderReminders();}}
 function writeAttachments(woid,atts){if(DB){DB.ref('attachments/'+woid).set(atts);}else{ATTACHMENTS[woid]=atts;saveLocal();}}
 function writeContactLogs(woid,logs){if(DB){DB.ref('contactlogs/'+woid).set(logs);}else{CONTACTLOGS[woid]=logs;saveLocal();}}
-function writePartOrders(){if(DB){DB.ref('partorders').set(PARTORDERS);}else{saveLocal();}}
+// ── Parts to Order storage: every line lives at its own key (partorders/<cat>/<key>) and is saved on its own,
+// so two people changing different lines at the same time never overwrite each other. Older lines keep their
+// original numeric keys ("0","1",...); new lines get Firebase push keys. In memory each line carries _key (never saved).
+function poClean(p){var c={};Object.keys(p).forEach(function(k){if(k!=='_key'&&p[k]!==undefined)c[k]=p[k];});return c;}
+function poAdd(cat,item){
+  if(!PARTORDERS[cat])PARTORDERS[cat]=[];
+  if(DB){var ref=DB.ref('partorders/'+cat).push();item._key=ref.key;PARTORDERS[cat].push(item);ref.set(poClean(item));}
+  else{PARTORDERS[cat].push(item);saveLocal();}
+}
+// The current copy of a line (a button drawn a minute ago may hold an older copy). null = someone already deleted it.
+function poFind(cat,p){
+  var arr=PARTORDERS[cat]||[];
+  if(arr.indexOf(p)>=0)return p;
+  if(!p||!p._key)return null;
+  for(var i=0;i<arr.length;i++){if(arr[i]._key===p._key)return arr[i];}
+  return null;
+}
+// list: [{cat,p,fields}] — one combined save touching only those fields on those lines.
+function poUpdateMany(list){
+  var up={},gone=0;
+  list.forEach(function(x){
+    var cur=poFind(x.cat,x.p);if(!cur){gone++;return;}   // deleted on another device — don't write to it
+    Object.keys(x.fields).forEach(function(f){var v=x.fields[f];if(v===undefined)v=null;cur[f]=v;if(cur._key)up['partorders/'+x.cat+'/'+cur._key+'/'+f]=v;});
+  });
+  if(gone&&list.length===1)alert('That part was just removed from the list on another device.');
+  if(!DB){saveLocal();return;}
+  if(Object.keys(up).length)DB.ref().update(up);
+}
+function poUpdate(cat,p,fields){poUpdateMany([{cat:cat,p:p,fields:fields}]);}
+function poRemove(cat,p){
+  var cur=poFind(cat,p)||p,arr=PARTORDERS[cat]||[],at=arr.indexOf(cur);if(at>=0)arr.splice(at,1);
+  if(DB){if(cur._key)DB.ref('partorders/'+cat+'/'+cur._key).remove();}else saveLocal();
+}
+function writePartOrders(){if(!DB)saveLocal();}   // offline mode only — online saves go through poAdd/poUpdate/poRemove
 
 function addTech(){var n=document.getElementById('new-tech').value.trim();if(!n||TECHS.indexOf(n)>=0)return;TECHS.push(n);writeTechs();renderTechs();populateTechSels();document.getElementById('new-tech').value='';}
 function removeTech(n){dangerConfirm('Remove technician?','Remove '+n+' from the technician list?\n\nTheir open jobs will move to the Unassigned column on Shop Load (tagged with their name) until you reassign them.','Yes, remove',function(){TECHS=TECHS.filter(function(t){return t!==n;});writeTechs();renderTechs();populateTechSels();renderBoard();});}
@@ -1469,7 +1541,7 @@ function renderStaleOrders(){
     var ids=[];box.querySelectorAll('.stale-ck:checked').forEach(function(c){ids.push(c.value);});
     if(!ids.length){alert('Check the jobs to close out first.');return;}
     if(!confirm('Mark '+ids.length+' job'+(ids.length!==1?'s':'')+' as Picked Up?\n\nNothing is deleted. They move to the Work Order Archive.'))return;
-    ids.forEach(function(id){var o=ORDERS[id];if(!o)return;setStatus(o,'Picked Up');o.partsWaiting='';o.staleClosed=today();writeOrder(o);});
+    ids.forEach(function(id){var o=ORDERS[id];if(!o)return;setStatus(o,'Picked Up');o.partsWaiting='';o.staleClosed=today();writeOrderFields(o,['status','statusTs','partsWaiting','staleClosed']);});
     setTimeout(renderStaleOrders,400);
   };
 }
@@ -1907,6 +1979,7 @@ function openNewWO(){
 }
 function openEditWO(id){
   var o=ORDERS[id];if(!o)return;editWOid=id;
+  _editBase=JSON.parse(JSON.stringify(o));   // snapshot of the job as it was when the form opened (to detect other people's edits)
   document.getElementById('wo-mtitle').textContent='Edit WO #'+o.woNum;document.getElementById('wo-del-btn').style.display='';
   populateTechSels();
   setCustById(o.custId||'');document.getElementById('m-tech').value=o.tech||'Unassigned';
@@ -1925,20 +1998,76 @@ function openEditWO(id){
   var pb=document.getElementById('pt-body');pb.innerHTML='';(o.parts||[]).forEach(function(p){appPR(p);});
   closeM('det-modal');renderEstSuggest();document.getElementById('wo-modal').classList.add('open');
 }
-function quickStatus(id,s){var o=ORDERS[id];if(!o)return;setStatus(o,s);if(s!=='Waiting on Parts')o.partsWaiting='';writeOrder(o);openDet(id);}
+function quickStatus(id,s){var o=ORDERS[id];if(!o)return;setStatus(o,s);if(s!=='Waiting on Parts')o.partsWaiting='';writeOrderFields(o,['status','statusTs','partsWaiting']);openDet(id);}
 
 function addPRow(){appPR({desc:'',qty:1,note:''});}
 // Values are set as DOM properties (never pasted into HTML) so inch marks like 18" chain survive an edit + save.
 function appPR(p){var tr=document.createElement('tr');tr.setAttribute('data-pn',p.pn||'');var si='border:1.5px solid var(--silver);border-radius:3px;padding:4px 6px;font-size:12px;background:var(--white);color:var(--dark);width:100%;font-family:Barlow,sans-serif';tr.innerHTML='<td style="width:40%"><input type="text" placeholder="e.g. Air filter, Labor — rebuild" style="'+si+'"></td><td style="width:12%"><input type="number" min="1" style="'+si+'"></td><td style="display:flex;gap:4px;padding:0"><input type="text" placeholder="Optional notes..." style="'+si+';flex:1"><button class="btn sm del" onclick="this.closest(\'tr\').remove()" style="padding:3px 7px;flex-shrink:0">&#x2715;</button></td>';var ins=tr.querySelectorAll('input');ins[0].value=p.desc||'';ins[1].value=p.qty||1;ins[2].value=p.note||'';document.getElementById('pt-body').appendChild(tr);}
 function getParts(){var parts=[];document.querySelectorAll('#pt-body tr').forEach(function(r){var ins=r.querySelectorAll('input');if(ins[0]&&ins[0].value.trim())parts.push({pn:r.getAttribute('data-pn')||'',desc:ins[0].value,qty:parseFloat(ins[1].value)||1,note:ins[2]?ins[2].value:''});});return parts;}
 
+var _editBase=null,_woSaving=false;
+// Every field the work order form owns.
+function readWOForm(){
+  var g=function(id){return document.getElementById(id).value;};
+  return {custId:g('m-cust'),tag:g('m-tag'),ticket:g('m-ticket'),location:g('m-location'),tech:g('m-tech'),equipType:g('m-etype'),brand:g('m-brand'),year:g('m-year'),product:g('m-product'),model:g('m-model'),serial:g('m-serial'),engine:g('m-engine'),hours:g('m-hours'),complaint:g('m-complaint'),notes:g('m-notes'),status:g('m-status'),quick:document.getElementById('m-quick').checked,authAmt:g('m-auth').trim(),dateIn:g('m-datein'),estDate:g('m-estdate'),dateOut:g('m-dateout'),urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:g('m-parts-waiting'),parts:getParts()};
+}
+// Compare two field values, treating blank/unset/false the same and ignoring number-vs-text differences in parts.
+function woFieldKey(f,v){
+  if(f==='parts')return JSON.stringify(asArr(v).map(function(p){return [p.pn||'',p.desc||'',String(p.qty||''),p.note||''];}));
+  if(v===undefined||v===null||v===false)return '';
+  return String(v);
+}
+// Work order numbers come from one shared counter, so two devices can never hand out the same number.
+function allocateWoNum(cb){
+  var localNext=nextWO;
+  if(!DB){cb(nextWO++);return;}
+  var done=false;
+  var t=setTimeout(function(){if(done)return;done=true;cb(nextWO++);},8000);   // no connection: fall back to this device's count
+  DB.ref('settings/woCounter').transaction(function(cur){return Math.max(parseInt(cur)||0,localNext)+1;},function(err,committed,snap){
+    if(done)return;clearTimeout(t);done=true;
+    if(err||!committed){cb(nextWO++);return;}
+    var num=snap.val()-1;if(num>=nextWO)nextWO=num+1;cb(num);
+  },false);
+}
 function saveWO(){
+  if(_woSaving)return;
   var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
-  var prev=editWOid?(ORDERS[editWOid]||{}):{},newN=document.getElementById('m-notes').value;
-  var nts=newN!==prev.notes?new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):(prev.notesTs||'');
-  var o={id:editWOid||genId(),woNum:editWOid?(prev.woNum||nextWO++):nextWO++,custId:cid,tag:document.getElementById('m-tag').value,ticket:document.getElementById('m-ticket').value,location:document.getElementById('m-location').value,intakeBy:prev.intakeBy||myDisplayName(),tech:document.getElementById('m-tech').value,equipType:document.getElementById('m-etype').value,brand:document.getElementById('m-brand').value,year:document.getElementById('m-year').value,product:document.getElementById('m-product').value,model:document.getElementById('m-model').value,serial:document.getElementById('m-serial').value,engine:document.getElementById('m-engine').value,hours:document.getElementById('m-hours').value,complaint:document.getElementById('m-complaint').value,notes:newN,notesTs:nts,status:document.getElementById('m-status').value,statusTs:null,quick:document.getElementById('m-quick').checked,authAmt:document.getElementById('m-auth').value.trim(),dateIn:document.getElementById('m-datein').value,estDate:document.getElementById('m-estdate').value,dateOut:document.getElementById('m-dateout').value,urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:document.getElementById('m-parts-waiting').value,parts:getParts()};
-  o.statusTs=(!editWOid||prev.status!==o.status)?Date.now():(prev.statusTs||null);
-  writeOrder(o);syncEquipmentFromOrder(o);closeM('wo-modal');
+  var f=readWOForm(),stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  if(!editWOid){
+    // New job: get a number from the shared counter, then save the whole record.
+    _woSaving=true;var btn=document.getElementById('wo-save-btn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
+    allocateWoNum(function(num){
+      _woSaving=false;if(btn){btn.disabled=false;btn.textContent='Save Work Order';}
+      var o=Object.assign({id:genId(),woNum:num,intakeBy:myDisplayName(),notesTs:f.notes?stamp:'',statusTs:Date.now()},f);
+      writeOrder(o);syncEquipmentFromOrder(o);closeM('wo-modal');
+    });
+    return;
+  }
+  // Existing job: save ONLY the fields this person changed, so parts/notes/status someone else changed meanwhile survive.
+  var id=editWOid,base=_editBase||{},cur=ORDERS[id]||base;
+  var changed=Object.keys(f).filter(function(k){return woFieldKey(k,f[k])!==woFieldKey(k,base[k]);});
+  var conflicts=[];
+  changed.forEach(function(k){
+    if(woFieldKey(k,cur[k])===woFieldKey(k,base[k])||woFieldKey(k,cur[k])===woFieldKey(k,f[k]))return;   // nobody else touched it
+    if(k==='notes'&&(f.notes||'').indexOf(base.notes||'')===0){f.notes=(cur.notes||'')+(f.notes||'').slice((base.notes||'').length);return;}   // both only added to notes: keep both
+    conflicts.push(k);
+  });
+  if(conflicts.length){
+    var LBL={custId:'Customer',tech:'Tech',status:'Status',notes:'Notes',parts:'Parts list',complaint:'Complaint',estDate:'Est. completion',dateOut:'Date completed',partsWaiting:'Parts being waited on',authAmt:'Approved amount'};
+    var names=conflicts.map(function(k){return LBL[k]||k;}).join(', ');
+    if(!confirm('While you had this job open, someone else changed: '+names+'.\n\nOK = save YOUR version of those (replaces theirs).\nCancel = keep THEIR version of those. Your other changes still save.')){
+      changed=changed.filter(function(k){return conflicts.indexOf(k)<0;});
+    }
+  }
+  var up={};changed.forEach(function(k){up[k]=f[k];});
+  if(changed.indexOf('status')>=0)up.statusTs=Date.now();
+  if(changed.indexOf('notes')>=0)up.notesTs=stamp;
+  var merged=Object.assign({},cur,up,{id:id});
+  if(changed.length){
+    if(DB){DB.ref('orders/'+id).update(up);writePublicStatus(merged);}
+    else{ORDERS[id]=merged;saveLocal();refreshAll();}
+  }
+  syncEquipmentFromOrder(merged);_editBase=null;closeM('wo-modal');
 }
 // ── Every work order automatically logs its equipment on the customer's record as "Serviced by Miller Hardware" (same shape as "Log Equipment", different record type than an actual sale), deduped so repeat visits for the same unit don't pile up. ──
 function equipMatchKey(e){
@@ -2973,31 +3102,27 @@ function applyDiag(id){
   var o=ORDERS[id];if(!o)return;
   var box=document.getElementById('diag-panel-'+id);if(!box)return;
   var note=(document.getElementById('diag-note-'+id)||{}).value||'';note=note.trim();
-  var parts=(o.parts||[]).slice(),ordered=[],anyOrder=false;
+  var newParts=[],ordered=[],anyOrder=false;
   box.querySelectorAll('.diag-row').forEach(function(r){
     if(!r.querySelector('.dg-use').checked)return;
     var desc=r.querySelector('.dg-desc').value.trim();if(!desc)return;
     var pn=r.querySelector('.dg-pn').value.trim(),qty=parseFloat(r.querySelector('.dg-qty').value)||1;
     var needsOrder=r.querySelector('.dg-order').checked,vendor=r.querySelector('.dg-vendor').value||'';
-    parts.push({pn:pn,desc:desc,qty:qty,note:needsOrder?'On order':''});
+    newParts.push({pn:pn,desc:desc,qty:qty,note:needsOrder?'On order':''});
     if(needsOrder){
       anyOrder=true;ordered.push(desc);
       var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
-      if(!PARTORDERS.other)PARTORDERS.other=[];
-      PARTORDERS.other.push({pn:pn,desc:desc,qty:qty,equip:equip,notes:'',woId:id,woNum:o.woNum||null,vendor:vendor,location:o.location||'Yellville',ordered:false,received:false,paid:false,added:today(),addedBy:myDisplayName()});
+      poAdd('other',{pn:pn,desc:desc,qty:qty,equip:equip,notes:'',woId:id,woNum:o.woNum||null,vendor:vendor,location:o.location||'Yellville',ordered:false,received:false,paid:false,added:today(),addedBy:myDisplayName()});
     }
   });
-  o.parts=parts;
+  if(newParts.length)appendOrderParts(o,newParts);
   if(note){
     var stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    var line=stamp+': Diagnosis: '+note;
-    o.notes=o.notes?(o.notes+'\n'+line):line;
-    o.notesTs=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    appendOrderNote(o,stamp+': Diagnosis: '+note);
   }
   var ns=(document.getElementById('diag-status-'+id)||{}).value||'';
-  if(ns){setStatus(o,ns);if(ns==='Waiting on Parts'&&!o.partsWaiting&&ordered.length)o.partsWaiting=ordered.join(', ');if(ns!=='Waiting on Parts')o.partsWaiting='';}
-  writeOrder(o);
-  if(anyOrder){writePartOrders();renderPartOrders();}
+  if(ns){setStatus(o,ns);if(ns==='Waiting on Parts'&&!o.partsWaiting&&ordered.length)o.partsWaiting=ordered.join(', ');if(ns!=='Waiting on Parts')o.partsWaiting='';writeOrderFields(o,['status','statusTs','partsWaiting']);}
+  if(anyOrder)renderPartOrders();
   openDet(id);
 }
 // ── Parts ordered for a specific work order (linked items in Parts to Order) ──
@@ -3034,17 +3159,13 @@ function quickAddPart(woid){
   var pn=(document.getElementById('ql-pn-'+woid)||{}).value;pn=pn?pn.trim():'';
   var needsOrder=!!(document.getElementById('ql-order-'+woid)||{}).checked;
   var vendor=(document.getElementById('ql-vendor-'+woid)||{}).value||'';
-  var parts=(o.parts||[]).slice();
-  parts.push({pn:pn,desc:desc,qty:qty,note:needsOrder?'On order':''});
-  o.parts=parts;writeOrder(o);
+  appendOrderParts(o,[{pn:pn,desc:desc,qty:qty,note:needsOrder?'On order':''}]);
   if(needsOrder){
     var equip=[o.brand,o.equipType,o.product?'P#'+o.product:'',o.model?'— '+o.model:'',o.serial?'SN:'+o.serial:''].filter(Boolean).join(' ');
-    var item={pn:pn,desc:desc,qty:qty,equip:equip,notes:'',
+    poAdd('other',{pn:pn,desc:desc,qty:qty,equip:equip,notes:'',
       woId:woid,woNum:o.woNum||null,vendor:vendor,location:o.location||'Yellville',
-      ordered:false,received:false,paid:false,added:today(),addedBy:myDisplayName()};
-    if(!PARTORDERS.other)PARTORDERS.other=[];
-    PARTORDERS.other.push(item);
-    writePartOrders();renderPartOrders();
+      ordered:false,received:false,paid:false,added:today(),addedBy:myDisplayName()});
+    renderPartOrders();
   }
   document.getElementById('ql-note-'+woid).value='';
   document.getElementById('ql-qty-'+woid).value='1';
@@ -3128,9 +3249,7 @@ function quickAddNote(woid){
   if(!txt){alert('Type a note first.');return;}
   var o=ORDERS[woid];if(!o)return;
   var stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  o.notes=o.notes?(o.notes+'\n'+stamp+': '+txt):(stamp+': '+txt);
-  o.notesTs=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
-  writeOrder(o);openDet(woid);
+  appendOrderNote(o,stamp+': '+txt);openDet(woid);
 }
 function deletePart(woid,idx){
   var o=ORDERS[woid];if(!o)return;
@@ -3145,12 +3264,8 @@ function deletePart(woid,idx){
   if(link&&!link.p.batchId&&!link.p.ordered)extra='\n\nIt will also be taken off the Parts to Order list, since it has not been ordered yet.';
   else if(link)extra='\n\nHEADS UP: this part was already ordered'+(link.p.vendor?' from '+link.p.vendor:'')+(link.p.batchOrderedAt?' on '+link.p.batchOrderedAt:'')+'. It stays on the Parts to Order list. Cancel it with the vendor if you do not need it.';
   dangerConfirm('Remove part?','Remove "'+((pp.pn?pp.pn+' ':'')+(pp.desc||'this part'))+'" from work order #'+o.woNum+'?'+extra,'Yes, remove it',function(){
-  var parts=(o.parts||[]).slice();parts.splice(idx,1);
-  o.parts=parts;writeOrder(o);
-  if(link&&!link.p.batchId&&!link.p.ordered){
-    var arr=PARTORDERS[link.cat]||[],at=arr.indexOf(link.p);   // look it up by object, not a saved position
-    if(at>=0){arr.splice(at,1);writePartOrders();renderPartOrders();}
-  }
+  removeOrderPart(o,pp);
+  if(link&&!link.p.batchId&&!link.p.ordered){poRemove(link.cat,link.p);renderPartOrders();}
   openDet(woid);
   });
 }
@@ -3171,24 +3286,20 @@ function savePartOrder(){
     woId:null,woNum:null,vendor:document.getElementById('po-vendor').value||'',location:defaultLocation(),
     special:document.getElementById('po-special').checked,
     ordered:false,received:false,paid:document.getElementById('po-paid').checked,added:today(),addedBy:myDisplayName()};
-  if(!PARTORDERS.other)PARTORDERS.other=[];
-  PARTORDERS.other.push(item);
-  writePartOrders();closeM('part-order-modal');renderPartOrders();
+  poAdd('other',item);
+  closeM('part-order-modal');renderPartOrders();
 }
-function togglePOFlag(cat,idx,flag){
-  if(!PARTORDERS[cat]||!PARTORDERS[cat][idx])return;
-  PARTORDERS[cat][idx][flag]=!PARTORDERS[cat][idx][flag];
-  if(flag==='received'){
-    if(PARTORDERS[cat][idx].received){PARTORDERS[cat][idx].ordered=true;PARTORDERS[cat][idx].receivedOn=today();}
-    else{PARTORDERS[cat][idx].receivedOn=null;}
-  }
-  writePartOrders();renderPartOrders();
+// Buttons pass the line itself (not its position), so a list that changed on another device can never make them hit the wrong part.
+function togglePOFlag(cat,p,flag){
+  p=poFind(cat,p)||p;if(!p)return;   // flip based on the current value, not a stale copy
+  var f={};f[flag]=!p[flag];
+  if(flag==='received'){if(f.received){f.ordered=true;f.receivedOn=today();}else{f.receivedOn=null;}}
+  poUpdate(cat,p,f);renderPartOrders();
 }
-function deletePO(cat,idx){
-  var p=(PARTORDERS[cat]||[])[idx]||{};
+function deletePO(cat,p){
+  if(!p)return;
   dangerConfirm('Delete part?','Delete "'+((p.pn?p.pn+' ':'')+(p.desc||'this part'))+'" from Parts to Order?','Yes, delete it',function(){
-  PARTORDERS[cat].splice(idx,1);
-  writePartOrders();renderPartOrders();
+  poRemove(cat,p);renderPartOrders();
   });
 }
 // Search is a separate, standalone lookup — it renders into its own area and never takes over the ordering view below it.
@@ -3351,9 +3462,7 @@ function buildVendorCard(v,batchId,items){
         var item={pn:pnIn.value.trim(),desc:desc,qty:parseInt(qtyIn.value)||1,equip:'',notes:'',
           woId:null,woNum:null,vendor:v,location:defaultLocation(),special:specCk.checked,
           ordered:false,received:false,paid:false,added:today(),addedBy:myDisplayName()};
-        if(!PARTORDERS.other)PARTORDERS.other=[];
-        PARTORDERS.other.push(item);
-        writePartOrders();renderPartOrders();
+        poAdd('other',item);renderPartOrders();
       };
       addRow.appendChild(pnIn);addRow.appendChild(descIn);addRow.appendChild(qtyIn);addRow.appendChild(specLbl);addRow.appendChild(addBtn);
       card.appendChild(addRow);
@@ -3364,35 +3473,36 @@ function buildVendorCard(v,batchId,items){
 }
 function closeVendorCart(v,eta){
   if(!confirm('Mark this list as Ordered? New parts added for '+(v||'this vendor')+' will start a fresh list.'+(eta?'':'\n\nTip: add an expected arrival date so the shop knows when these parts are due.')))return;
-  var bid='b'+Date.now(),dt=today();
+  var bid='b'+Date.now(),dt=today(),list=[];
   ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p){
     if(p.received||p.batchId)return;
     if(!partLocMatches(p))return;
     if(vendorKeyFor(cat,p)!==v)return;
-    p.batchId=bid;p.batchOrderedAt=dt;p.ordered=true;p.eta=eta||'';
+    list.push({cat:cat,p:p,fields:{batchId:bid,batchOrderedAt:dt,ordered:true,eta:eta||''}});
   });});
-  writePartOrders();renderPartOrders();
+  poUpdateMany(list);renderPartOrders();
 }
 function setBatchEta(batchId,eta){
   if(!batchId)return;
+  var list=[];
   ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p){
     if(p.batchId!==batchId)return;
     if(!partLocMatches(p))return;
-    p.eta=eta||'';
+    list.push({cat:cat,p:p,fields:{eta:eta||''}});
   });});
-  writePartOrders();renderPartOrders();
+  poUpdateMany(list);renderPartOrders();
 }
 function selectAllReceive(v,batchId){
   if(!confirm('Mark all items in this list as Received?'))return;
-  var dt=today();
+  var dt=today(),list=[];
   ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p){
     if(p.received)return;
     if(!partLocMatches(p))return;
     if(vendorKeyFor(cat,p)!==v)return;
     if((p.batchId||null)!==(batchId||null))return;
-    p.received=true;p.receivedOn=dt;p.ordered=true;
+    list.push({cat:cat,p:p,fields:{received:true,receivedOn:dt,ordered:true}});
   });});
-  writePartOrders();renderPartOrders();
+  poUpdateMany(list);renderPartOrders();
 }
 function downloadPartsOrderList(v,batchId,items){
   if(!(window.jspdf&&window.jspdf.jsPDF)){alert('PDF tool is still loading — give it a second and tap Download again.');return;}
@@ -3516,7 +3626,7 @@ function buildPORow(cat,i,p){
         if(p.vendor&&VENDORS.indexOf(p.vendor)<0){var vx=document.createElement('option');vx.value=p.vendor;vx.textContent=p.vendor;vSel.appendChild(vx);}
         vSel.value=p.vendor||'';
         if(!p.vendor)vSel.style.borderColor='#EF9F27';
-        vSel.onchange=(function(c,idx){return function(){PARTORDERS[c][idx].vendor=this.value;writePartOrders();renderPartOrders();};})(cat,i);
+        vSel.onchange=function(){poUpdate(cat,p,{vendor:this.value});renderPartOrders();};
         btns.appendChild(vSel);
       }
       if(p.batchId){
@@ -3526,20 +3636,20 @@ function buildPORow(cat,i,p){
         var bOrd=document.createElement('button');
         bOrd.className='btn sm'+(p.ordered?' primary':'');
         bOrd.textContent=p.ordered?'✓ Ordered':'Order';
-        bOrd.onclick=(function(c,idx){return function(){togglePOFlag(c,idx,'ordered');};})(cat,i);
+        bOrd.onclick=function(){togglePOFlag(cat,p,'ordered');};
         btns.appendChild(bOrd);
       }
       var bRec=document.createElement('button');
       bRec.className='btn sm'+(p.received?' success':'');
       bRec.textContent=p.received?'✓ In':'Received';
-      bRec.onclick=(function(c,idx){return function(){togglePOFlag(c,idx,'received');};})(cat,i);
+      bRec.onclick=function(){togglePOFlag(cat,p,'received');};
       var bPaid=document.createElement('button');
       bPaid.className='btn sm'+(p.paid?' success':'');
       bPaid.textContent=p.paid?'✓ Paid':'Paid';
-      bPaid.onclick=(function(c,idx){return function(){togglePOFlag(c,idx,'paid');};})(cat,i);
+      bPaid.onclick=function(){togglePOFlag(cat,p,'paid');};
       var bDel=document.createElement('button');
       bDel.className='btn sm del';bDel.textContent='✕';
-      bDel.onclick=(function(c,idx){return function(){deletePO(c,idx);};})(cat,i);
+      bDel.onclick=function(){deletePO(cat,p);};
       btns.appendChild(bRec);btns.appendChild(bPaid);btns.appendChild(bDel);
       row.appendChild(info);row.appendChild(btns);
       return row;
@@ -3549,7 +3659,8 @@ var SETTINGS={ageWarnDays:7,ageOldDays:14,trackerOn:true};
 function saveAgeSettings(){
   SETTINGS.ageWarnDays=parseInt(document.getElementById('age-warn-days').value)||7;
   SETTINGS.ageOldDays=parseInt(document.getElementById('age-old-days').value)||14;
-  if(DB){DB.ref('settings').set(SETTINGS);}else{saveLocal();}
+  // Save just these two values — never the whole settings object, which could undo someone else's change.
+  if(DB){DB.ref('settings').update({ageWarnDays:SETTINGS.ageWarnDays,ageOldDays:SETTINGS.ageOldDays});}else{saveLocal();}
   renderOrders();renderBoard();
 }
 function loadAgeInputs(){
@@ -3712,7 +3823,7 @@ function textCustomer(id){
 
 // ── Track My Repair (customer-facing read-only status page) ──────────────
 function trackerLink(id){return location.origin+location.pathname+'?track='+id;}
-function saveTrackerSetting(){SETTINGS.trackerOn=document.getElementById('tracker-on').checked;if(DB){DB.ref('settings').set(SETTINGS);DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn);}else{saveLocal();}loadTrackerToggle();}
+function saveTrackerSetting(){SETTINGS.trackerOn=document.getElementById('tracker-on').checked;if(DB){DB.ref('settings/trackerOn').set(SETTINGS.trackerOn);DB.ref('public_config/trackerOn').set(SETTINGS.trackerOn);}else{saveLocal();}loadTrackerToggle();}
 function loadTrackerToggle(){var el=document.getElementById('tracker-on');if(!el)return;var on=SETTINGS.trackerOn!==false;el.checked=on;var lbl=document.getElementById('tracker-on-lbl');if(lbl)lbl.textContent=on?'Enabled — status links are shared in customer texts':'Disabled — no status links shared';}
 function trackerMsg(title,sub){return '<div style="max-width:460px;margin:40px auto;padding:28px 22px;font-family:Barlow,sans-serif;text-align:center;color:#1a1a1a"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:24px">MILLER HARDWARE</div><div style="font-size:12px;color:#888;letter-spacing:.09em;text-transform:uppercase;margin-bottom:22px">Saw Shop</div><div style="font-size:19px;font-weight:800;margin-bottom:8px">'+title+'</div><div style="font-size:15px;color:#555;line-height:1.4">'+sub+'</div></div>';}
 function initTracker(id){
