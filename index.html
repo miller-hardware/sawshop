@@ -362,7 +362,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <div class="stat"><div class="lbl">Ready for Pickup</div><div class="val" id="b-ready" style="color:#2d7d1e">0</div></div>
       <div class="stat"><div class="lbl">Completed</div><div class="val" id="b-done">0</div></div>
     </div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs. The day tag on each job shows how long it has sat in its current stage &mdash; it turns <strong style="color:var(--red)">red</strong> when it has been there too long. &#9889; = quick job, do first.</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Open orders grouped by technician. Red header = 4+ jobs. The day tag on each job shows how long it has sat in its current stage &mdash; it turns <strong style="color:var(--red)">red</strong> when it has been there too long. &#9889; = quick job (about 30 min or less).</div>
     <div class="board-wrap"><div class="board" id="board-inner"></div></div>
   </div>
 
@@ -617,7 +617,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <input type="checkbox" id="m-urg" style="width:15px;height:15px;accent-color:var(--red)"> Mark as Priority / Urgent
   </label>
   <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin:-6px 0 12px">
-    <input type="checkbox" id="m-quick" style="width:15px;height:15px;accent-color:var(--red)"> &#9889; Quick job &mdash; about 30 min or less (plug, filter, pull cord, sharpen). Moves to the top of the tech&rsquo;s list.
+    <input type="checkbox" id="m-quick" style="width:15px;height:15px;accent-color:var(--red)"> &#9889; Quick job &mdash; about 30 min or less (plug, filter, pull cord, sharpen). Gets a &#9889; Quick label; stays in its place in line.
   </label>
   <div class="g3" style="margin-bottom:0">
     <div class="f"><label>Location</label>
@@ -1018,7 +1018,7 @@ function stageAgeChip(o){
   return '<span class="stage-age'+(stageLate(o)?' late':'')+'" title="'+tip+'">'+(d===0?'Today':d+'d')+' in stage</span>';
 }
 function authChip(o){var a=parseFloat(o.authAmt);return a>0?'<span class="chip-auth" title="Customer approved repairs up to $'+a+' without a call">OK $'+a+'</span>':'';}
-function quickChip(o){return o.quick?'<span class="chip-quick" title="Quick job - do first">&#9889; Quick</span>':'';}
+function quickChip(o){return o.quick?'<span class="chip-quick" title="Quick job - about 30 min or less">&#9889; Quick</span>':'';}
 function setStatus(o,s){if(o.status!==s){o.status=s;o.statusTs=Date.now();}}
 function setSP(st,t){var p=document.getElementById('sync-pill');p.className='sync-pill '+st;p.querySelector('.dot').className='dot '+(st==='ok'?'g':st==='err'?'r':'a');document.getElementById('sync-txt').textContent=t;}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
@@ -1213,6 +1213,9 @@ function initFB(){
     loadLocal();
     showLogin();
     AUTH.onAuthStateChanged(function(user){
+      // Other no-login Miller apps on this same web address (e.g. Delivery) sign in anonymously, and that
+      // login is shared across them. An anonymous login must NOT open the saw shop: only a real staff account.
+      if(user&&user.isAnonymous)user=null;
       CURRENT_USER=user||null;
       if(user){hideLogin();startDataSync();}else{showLogin();}
     });
@@ -1721,11 +1724,8 @@ function renderBoard(){
   st('b-done',done.length);
   var allTechs=['Unassigned'].concat(TECHS);
   el.innerHTML=allTechs.map(function(tech){
-    // Urgent first, then quick jobs, then everything else in date-in order.
-    var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;})
-      .map(function(o,i){return {o:o,i:i};})
-      .sort(function(a,b){var ra=(a.o.urgent?0:a.o.quick?1:2),rb=(b.o.urgent?0:b.o.quick?1:2);return ra!==rb?ra-rb:a.i-b.i;})
-      .map(function(x){return x.o;});
+    // Quick jobs keep their place in line (urgent first, then date in); they just carry a ⚡ Quick label.
+    var jobs=open.filter(function(o){return(o.tech||'Unassigned')===tech;});
     var overloaded=jobs.length>=4;
     var cards=jobs.length?jobs.map(function(o){
       var c=CUSTS[o.custId]||{};var isWaiting=o.status==='Waiting on Parts',isCust=o.status==='Waiting on Customer';
@@ -1827,7 +1827,7 @@ function guideSections(){return [
 ['2. The tabs, at a glance',
  '<ul><li><strong>Shop Load</strong> &mdash; every open job at a glance, grouped by technician. This is what opens first.</li><li><strong>Customers</strong> &mdash; search or add customers and see their history.</li><li><strong>&#128222; Pickup &amp; Report</strong> &mdash; who&rsquo;s ready to be called, and who&rsquo;s been waiting.</li><li><strong>Reminders</strong> &mdash; customers due for seasonal service (a quick text brings in work).</li><li><strong>&#128295; Parts to Order</strong> &mdash; parts you need to order, grouped by vendor.</li><li><strong>Work Order Archive</strong> &mdash; every job, past and present.</li><li><strong>Settings</strong> &mdash; your account, plus vendors and techs you can manage.</li></ul>'],
 ['3. Taking in a repair (your #1 job)',
- '<p>When a customer brings something in:</p><ol><li>Tap <strong>+ New Work Order</strong> (red button, or the <strong>+</strong> on your phone).</li><li><strong>Customer:</strong> search their name or phone. New customer? Tap <strong>+ New</strong> and add them.</li><li><strong>Equipment:</strong> pick the type and fill in brand, model, and <strong>serial #</strong> &mdash; the more detail the better (you&rsquo;ll need the serial for warranty).</li><li><strong>What&rsquo;s wrong:</strong> put it in the <em>Customer Complaint</em> box, in their words (&ldquo;won&rsquo;t start&rdquo;, &ldquo;smokes&rdquo;).</li><li><strong>Hang tag #:</strong> write the same number on a paper tag and hang it on the unit.</li><li><strong>Approved up to $:</strong> ask &ldquo;Can we go ahead with repairs up to $___ without calling you?&rdquo; and enter the amount. This is the biggest time saver in the shop &mdash; the tech can fix it without waiting on a phone call. Leave it blank if they want a call first.</li><li><strong>Quick job?</strong> Check <strong>&#9889; Quick job</strong> for anything about 30 minutes or less (plug, filter, pull cord, sharpening) &mdash; it jumps to the top of the tech&rsquo;s list.</li><li><strong>Est. Completion:</strong> the app suggests a date based on how busy the shop is &mdash; tap <strong>Use</strong>, or set your own.</li><li>Tap <strong>Save Work Order</strong>, then <strong>Print Work Order</strong>.</li></ol><p>Hand the customer the top <strong>Counter Copy</strong> (their claim ticket); keep the tech sheet with the unit.</p>'],
+ '<p>When a customer brings something in:</p><ol><li>Tap <strong>+ New Work Order</strong> (red button, or the <strong>+</strong> on your phone).</li><li><strong>Customer:</strong> search their name or phone. New customer? Tap <strong>+ New</strong> and add them.</li><li><strong>Equipment:</strong> pick the type and fill in brand, model, and <strong>serial #</strong> &mdash; the more detail the better (you&rsquo;ll need the serial for warranty).</li><li><strong>What&rsquo;s wrong:</strong> put it in the <em>Customer Complaint</em> box, in their words (&ldquo;won&rsquo;t start&rdquo;, &ldquo;smokes&rdquo;).</li><li><strong>Hang tag #:</strong> write the same number on a paper tag and hang it on the unit.</li><li><strong>Approved up to $:</strong> ask &ldquo;Can we go ahead with repairs up to $___ without calling you?&rdquo; and enter the amount. This is the biggest time saver in the shop &mdash; the tech can fix it without waiting on a phone call. Leave it blank if they want a call first.</li><li><strong>Quick job?</strong> Check <strong>&#9889; Quick job</strong> for anything about 30 minutes or less (plug, filter, pull cord, sharpening) &mdash; it gets a &#9889; Quick label so techs can spot it, but it keeps its place in line.</li><li><strong>Est. Completion:</strong> the app suggests a date based on how busy the shop is &mdash; tap <strong>Use</strong>, or set your own.</li><li>Tap <strong>Save Work Order</strong>, then <strong>Print Work Order</strong>.</li></ol><p>Hand the customer the top <strong>Counter Copy</strong> (their claim ticket); keep the tech sheet with the unit.</p>'],
 ['4. Working a repair',
  '<p>Tap any job to open it. From there you can:</p><ul><li><strong>Update the status</strong> as you go: Intake &rarr; Diagnosing &rarr; Waiting on Customer &rarr; In Repair &rarr; Waiting on Parts &rarr; Ready &rarr; Picked Up. Just tap the status buttons. Use <strong>Waiting on Customer</strong> when you need their OK before going further &mdash; those jobs show up on Pickup &amp; Report so someone calls them.</li><li><strong>The day tag</strong> (&ldquo;3d in stage&rdquo;) shows how long a job has sat in its current status. It turns <strong>red</strong> when it has been there too long &mdash; red jobs need attention first.</li><li><strong>Quick Diagnosis:</strong> tap what you found (Carburetor, Fuel system, Tune-up&hellip;). It fills in the note and the usual parts, with part numbers filled in from past jobs on the same model. Edit anything, check <strong>Order it</strong> for parts you need to order, then tap <strong>Add to Work Order</strong>.</li><li><strong>Finding part numbers:</strong> tap <strong>&#128270; Parts Diagrams</strong> to open the diagrams for that model, or tap one of the <strong>Parts used on this model before</strong> buttons to fill in the part box.</li><li><strong>Add parts &amp; labor:</strong> type the part # and description, then tap <strong>+ Add Part</strong>. If it needs to be ordered, check <strong>Needs to be ordered</strong> first &mdash; it will also show up in &#128295; Parts to Order.</li><li><strong>Add notes:</strong> type and tap <strong>+ Add Note</strong>, or tap <strong>&#127908;</strong> and just talk &mdash; great for greasy hands.</li><li><strong>Attach photos:</strong> snap the damage or the serial plate.</li><li><strong>Drop-off signature:</strong> tap <strong>Capture</strong> on &ldquo;Drop-off &mdash; Authorizes Diagnosis&rdquo; and have the customer sign.</li></ul>'],
 ['5. Ordering parts',
@@ -2561,7 +2561,7 @@ function printWO(id){
     +(o.dateIn?'<div style="font-size:11px;color:#555">Date In: '+o.dateIn+'</div>':'')
     +(o.estDate?'<div style="font-size:11px;color:#555">Est. Done: '+o.estDate+'</div>':'')
     +'<div style="font-size:12px;font-weight:800;margin-top:3px;border:1.5px solid #1a1a1a;padding:2px 6px;display:inline-block">'+(parseFloat(o.authAmt)>0?'OK TO REPAIR UP TO $'+parseFloat(o.authAmt):'CALL BEFORE REPAIRS')+'</div>'
-    +(o.quick?'<div style="font-size:11px;font-weight:800;margin-top:2px">QUICK JOB &mdash; DO FIRST</div>':'')
+    +(o.quick?'<div style="font-size:11px;font-weight:800;margin-top:2px">&#9889; QUICK JOB</div>':'')
     +'</div>'
     +'</div>'
     +'</div>'
