@@ -1306,9 +1306,15 @@ function doLogin(){
   if(!v||!pw){le.textContent='Enter your name/email and password.';return;}
   var email=v.indexOf('@')>=0?v:(v.toLowerCase().replace(/\s+/g,'')+'@millersawshop.local');
   var btn=document.getElementById('login-btn');if(btn){btn.disabled=true;btn.textContent='Signing in…';}
+  // On iPhones the browser's storage sometimes freezes and the sign-in never finishes. Say so instead of spinning forever.
+  var settled=false,slow=setTimeout(function(){if(settled)return;
+    le.textContent='This is taking too long. On an iPhone: close Safari all the way (swipe it up and away), open it again and sign in. If that doesn\'t help, restart the phone.';
+    if(btn){btn.disabled=false;btn.textContent='Sign In';}},15000);
   AUTH.signInWithEmailAndPassword(email,pw).then(function(){
+    settled=true;clearTimeout(slow);
     document.getElementById('login-pass').value='';
   }).catch(function(e){
+    settled=true;clearTimeout(slow);
     var code=e&&e.code||'';
     var msg=(code.indexOf('wrong-password')>=0||code.indexOf('user-not-found')>=0||code.indexOf('invalid-credential')>=0||code.indexOf('invalid-login')>=0)?'Wrong name or password.':((code.indexOf('operation-not-allowed')>=0||code.indexOf('configuration-not-found')>=0)?'Sign-in isn\'t enabled yet — finish the Firebase setup step.':(code.indexOf('too-many-requests')>=0?'Too many attempts — wait a minute and try again.':(code.indexOf('network')>=0?'No connection — check internet and try again.':(e.message||'Sign-in failed.'))));
     le.textContent=msg;
