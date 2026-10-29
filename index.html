@@ -371,6 +371,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="srow" style="margin-bottom:8px;align-items:center;gap:10px">
       <b style="font-size:16px">Service requests from the website</b>
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-left:auto"><input type="checkbox" id="webreq-showall" onchange="renderWebReqs()"> Show handled</label>
+      <button class="btn" id="webreq-alertbtn" onclick="toggleWebReqAlerts()" style="font-size:13px"></button>
     </div>
     <div id="webreq-list"></div>
   </div>
@@ -1288,7 +1289,7 @@ function startDataSync(){
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
   DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
   DB.ref('rental_waitlist').on('value',function(s){RENTAL_WAITLIST={};s.forEach(function(ch){RENTAL_WAITLIST[ch.key]=ch.val();});renderRentalCalendar();});
-  DB.ref('web_requests').on('value',function(s){WEBREQS={};s.forEach(function(ch){WEBREQS[ch.key]=ch.val();});renderWebReqs();},function(){/* no access yet: panel stays empty */});
+  DB.ref('web_requests').on('value',function(s){WEBREQS={};s.forEach(function(ch){WEBREQS[ch.key]=ch.val();});webReqAlertCheck();renderWebReqs();},function(){/* no access yet: panel stays empty */});
 }
 var AUTH=null,CURRENT_USER=null;
 function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
@@ -1833,6 +1834,40 @@ function refreshAll(){
 // The website can only ADD to web_requests (see the database rules); staff read them here and turn them into work orders.
 var WEBREQS={},PENDING_WEBREQ=null;
 function webReqWhen(t){if(!t)return'';var d=new Date(t);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+// Alerts for new web requests while the app is open: a chime, a desktop pop-up (if allowed) and a count in the browser tab title.
+var WEBREQ_SEEN=null,BASE_TITLE=document.title||"Saw Shop · Miller Hardware";
+function webReqAlertsOn(){try{return localStorage.getItem('webreqAlerts')!=='off';}catch(e){return true;}}
+function toggleWebReqAlerts(){
+  var on=!webReqAlertsOn();try{localStorage.setItem('webreqAlerts',on?'on':'off');}catch(e){}
+  if(on){webReqChime();if(window.Notification&&Notification.permission==='default')Notification.requestPermission().then(updateWebReqAlertBtn);}
+  updateWebReqAlertBtn();
+}
+function updateWebReqAlertBtn(){
+  var b=document.getElementById('webreq-alertbtn');if(!b)return;
+  var on=webReqAlertsOn(),pop=window.Notification&&Notification.permission==='granted';
+  b.textContent=on?('\uD83D\uDD14 Alerts on'+(pop?'':' (sound only)')):'\uD83D\uDD15 Alerts off';
+  b.title=on?'This computer chimes when a request comes in. Click to turn off.':'Click to chime when a website request comes in.';
+}
+function webReqChime(){
+  try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return;var ctx=new C();
+    [[880,0],[1320,0.18]].forEach(function(p){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      g.gain.setValueAtTime(0.0001,ctx.currentTime+p[1]);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+p[1]+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+p[1]+0.5);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+p[1]);o.stop(ctx.currentTime+p[1]+0.55);});
+  }catch(e){}
+}
+function webReqAlertCheck(){
+  var ids=Object.keys(WEBREQS).filter(function(k){return (WEBREQS[k]||{}).status==='new';});
+  document.title=(ids.length?'('+ids.length+') ':'')+BASE_TITLE;
+  if(WEBREQ_SEEN===null){WEBREQ_SEEN={};ids.forEach(function(k){WEBREQ_SEEN[k]=1;});updateWebReqAlertBtn();return;}
+  var fresh=ids.filter(function(k){return !WEBREQ_SEEN[k];});ids.forEach(function(k){WEBREQ_SEEN[k]=1;});
+  if(!fresh.length||!webReqAlertsOn())return;
+  webReqChime();
+  if(window.Notification&&Notification.permission==='granted'){
+    var r=WEBREQS[fresh[0]]||{};
+    try{var n=new Notification('New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
+      n.onclick=function(){window.focus();showTab('webreq');n.close();};}catch(e){}
+  }
+}
 function renderWebReqs(){
   var badge=document.getElementById('webreq-badge'),box=document.getElementById('webreq-list');
   var all=Object.keys(WEBREQS).map(function(k){var r=WEBREQS[k]||{};r._id=k;return r;}).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0);});
