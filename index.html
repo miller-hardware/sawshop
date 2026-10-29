@@ -369,7 +369,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 
   <div class="view" id="tab-webreq">
     <div class="srow" style="margin-bottom:8px;align-items:center;gap:10px">
-      <b style="font-size:16px">Service requests from the website</b>
+      <b style="font-size:16px">Requests from the website</b>
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-left:auto"><input type="checkbox" id="webreq-showall" onchange="renderWebReqs()"> Show handled</label>
       <button class="btn" id="webreq-alertbtn" onclick="toggleWebReqAlerts()" style="font-size:13px"></button>
     </div>
@@ -1266,8 +1266,8 @@ function startDataSync(){
   DB.ref('.info/connected').on('value',function(snap){
     setSP(snap.val()?'ok':'warn',snap.val()?'Live sync on':'Reconnecting...');
   });
-  DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();});
-  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});refreshAll();tryOpenWO();});
+  DB.ref('orders').on('value',function(s){ORDERS={};nextWO=1001;s.forEach(function(ch){var v=ch.val();ORDERS[ch.key]=v;if(v.woNum>=nextWO)nextWO=v.woNum+1;});refreshAll();tryOpenWO();maybeBackfillLookups();});
+  DB.ref('customers').on('value',function(s){CUSTS={};s.forEach(function(ch){CUSTS[ch.key]=ch.val();});refreshAll();tryOpenWO();maybeBackfillLookups();});
   DB.ref('techs').on('value',function(s){var t=s.val();if(t&&Array.isArray(t))TECHS=t;renderTechs();populateTechSels();refreshAll();});
   DB.ref('vendors').on('value',function(s){var v=s.val();if(v&&Array.isArray(v))VENDORS=v;renderVendors();renderPartOrders();});
   DB.ref('equipment').on('value',function(s){EQUIPMENT={};s.forEach(function(ch){EQUIPMENT[ch.key]=ch.val();});refreshAll();});
@@ -1385,10 +1385,15 @@ function appendOrderNote(o,line){
   DB.ref('orders/'+o.id+'/notes').transaction(function(cur){return cur?(cur+'\n'+line):line;});
   DB.ref('orders/'+o.id+'/notesTs').set(o.notesTs);
 }
-function deleteOrder(id){if(DB){DB.ref('orders/'+id).remove();DB.ref('public_status/'+id).remove();}else{delete ORDERS[id];saveLocal();refreshAll();}}
+function deleteOrder(id){if(DB){if(ORDERS[id]&&ORDERS[id].pubKey)DB.ref('public_lookup/'+ORDERS[id].pubKey).remove();DB.ref('orders/'+id).remove();DB.ref('public_status/'+id).remove();}else{delete ORDERS[id];saveLocal();refreshAll();}}
 // Public status mirror — only non-sensitive fields (first name, equipment, status); feeds the customer tracker so real customer data can stay locked.
 function publicStatusFor(o){var c=CUSTS[o.custId]||{};return {woNum:o.woNum||null,first:(c.first||'').trim().split(/\s+/)[0]||'',equip:[o.brand,o.equipType].filter(Boolean).join(' '),status:o.status||'Intake',estDate:o.estDate||'',location:o.location||'Yellville',updated:Date.now()};}
-function writePublicStatus(o){if(DB&&o&&o.id){DB.ref('public_status/'+o.id).set(publicStatusFor(o));}}
+function writePublicStatus(o){if(DB&&o&&o.id){DB.ref('public_status/'+o.id).set(publicStatusFor(o));writePublicLookup(o);}}
+// Lets customers look up a repair on the website with their work order number and the last 4 digits of their phone.
+function publicLookupKey(o){var c=CUSTS[o.custId]||{},d=String(c.phone||'').replace(/\D/g,'');return (o.woNum&&d.length>=4)?(o.woNum+'-'+d.slice(-4)):null;}
+function writePublicLookup(o){var k=publicLookupKey(o);if(DB&&k&&o.pubKey!==k){if(o.pubKey)DB.ref('public_lookup/'+o.pubKey).remove();DB.ref('public_lookup/'+k).set(o.id);o.pubKey=k;DB.ref('orders/'+o.id+'/pubKey').set(k);}}
+function maybeBackfillLookups(){if(!window._lkDone&&Object.keys(ORDERS).length&&Object.keys(CUSTS).length){window._lkDone=true;setTimeout(backfillPublicLookups,3000);}}
+function backfillPublicLookups(){if(!DB||!Object.keys(CUSTS).length)return;Object.keys(ORDERS).forEach(function(id){var o=ORDERS[id];if(o&&o.id&&o.status!=='Picked Up'&&!o.pubKey)writePublicLookup(o);});}
 function writeCust(c){if(DB){DB.ref('customers/'+c.id).set(c);}else{CUSTS[c.id]=c;saveLocal();renderCustomers();}}
 function writeTechs(){if(DB){DB.ref('techs').set(TECHS);}else{saveLocal();}}
 function writeEquipment(cid,eq){if(DB){DB.ref('equipment/'+cid).set(eq);}else{EQUIPMENT[cid]=eq;saveLocal();renderReminders();}}
@@ -1864,7 +1869,7 @@ function webReqAlertCheck(){
   webReqChime();
   if(window.Notification&&Notification.permission==='granted'){
     var r=WEBREQS[fresh[0]]||{};
-    try{var n=new Notification('New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
+    try{var n=new Notification(({parts:'New website parts request',trade:'New website trade-in'})[r.kind]||'New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
       n.onclick=function(){window.focus();showTab('webreq');n.close();};}catch(e){}
   }
 }
@@ -1878,18 +1883,26 @@ function renderWebReqs(){
   var list=showAll?all:open;
   if(!list.length){box.innerHTML='<div style="color:var(--muted);padding:22px 4px">'+(showAll?'No web requests yet.':'No new web requests. Requests sent from the website’s Contact page show up here.')+'</div>';return;}
   box.innerHTML=list.map(function(r){
-    var equip=[r.brand,r.equipType,r.model].filter(Boolean).map(escHtml).join(' &middot; ');
-    var state=r.status==='converted'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">WO #'+escHtml(r.woNum||'')+'</span>'
+    var kind=r.kind==='parts'?'parts':(r.kind==='trade'?'trade':'service');
+    var kindChip='<span style="background:'+({service:'#e8eef8',parts:'#fff3d6',trade:'#efe6f7'})[kind]+';color:#333;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+({service:'Service',parts:'Parts request',trade:'Trade-in'})[kind]+'</span>';
+    var equip=[r.brand,r.equipType,r.model].filter(Boolean).map(escHtml).join(' &middot; ')+(r.year?' &middot; '+escHtml(r.year):'')+(r.hours?' &middot; '+escHtml(r.hours)+' hrs':'');
+    var state=r.status==='converted'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+(r.woNum?'WO #'+escHtml(r.woNum):'Part added')+'</span>'
+      :r.status==='handled'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">Handled</span>'
       :(r.status==='dismissed'?'<span style="background:var(--off);color:var(--muted);font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">Dismissed</span>'
       :'<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">New</span>');
     var tel=String(r.phone||'').replace(/[^0-9+]/g,'');
     return '<div style="background:var(--white);border:1.5px solid var(--silver);border-left:4px solid var(--red);border-radius:4px;padding:12px 14px;margin-bottom:10px">'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center"><b style="font-size:16px">'+escHtml(r.name||'')+'</b>'+state
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center"><b style="font-size:16px">'+escHtml(r.name||'')+'</b>'+kindChip+state
       +'<span style="color:var(--muted);font-size:13px">'+escHtml(r.store||'')+' &middot; '+webReqWhen(r.createdAt)+(r.dropoff?' &middot; '+escHtml(r.dropoff):'')+'</span></div>'
       +(equip?'<div style="margin-top:6px;font-weight:600">'+equip+(r.serial?' &middot; SN '+escHtml(r.serial):'')+'</div>':'')
+      +(r.part?'<div style="margin-top:6px"><b>Part needed:</b> '+escHtml(r.part)+'</div>':'')
       +'<div style="margin-top:6px;white-space:pre-line">'+escHtml(r.problem||'')+'</div>'
       +'<div style="margin-top:8px;font-weight:600">'+(tel?'<a href="tel:'+escHtml(tel)+'">'+escHtml(r.phone)+'</a>':'')+(r.email?' &nbsp;&middot;&nbsp; <a href="mailto:'+escHtml(r.email)+'">'+escHtml(r.email)+'</a>':'')+'</div>'
-      +(r.status==='new'?'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" onclick="startWOFromWebReq(\''+r._id+'\')">Start work order</button><button class="btn sm outline" onclick="dismissWebReq(\''+r._id+'\')">Dismiss</button></div>':'')
+      +(r.status==='new'?'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
+        +(kind==='service'?'<button class="btn sm primary" onclick="startWOFromWebReq(\''+r._id+'\')">Start work order</button>':'')
+        +(kind==='parts'?'<button class="btn sm primary" onclick="partFromWebReq(\''+r._id+'\')">Add to Parts to Order</button>':'')
+        +(kind!=='service'?'<button class="btn sm primary" onclick="handleWebReq(\''+r._id+'\')">Mark handled</button>':'')
+        +'<button class="btn sm outline" onclick="dismissWebReq(\''+r._id+'\')">Dismiss</button></div>':'')
       +'</div>';
   }).join('');
 }
@@ -1917,6 +1930,15 @@ function startWOFromWebReq(id){
     document.getElementById('c-phone').value=r.phone||'';
     document.getElementById('c-email').value=r.email||'';
   }
+}
+function handleWebReq(id){if(!DB)return;DB.ref('web_requests/'+id).update({status:'handled',handledBy:myDisplayName(),handledAt:Date.now()});}
+var PENDING_WEBREQ_PART=null;
+function partFromWebReq(id){
+  var r=WEBREQS[id];if(!r)return;
+  openPartOrder(true);PENDING_WEBREQ_PART=id;
+  document.getElementById('po-desc').value=r.part||'';
+  document.getElementById('po-equip').value=[r.brand,r.model,r.serial?'SN '+r.serial:''].filter(Boolean).join(' ');
+  document.getElementById('po-notes').value='Web request: '+[r.name,r.phone,r.email].filter(Boolean).join(', ')+' ('+(r.store||'')+')';
 }
 function dismissWebReq(id){if(!DB)return;if(!confirm('Dismiss this web request? It stays in the list under "Show handled".'))return;DB.ref('web_requests/'+id).update({status:'dismissed',handledBy:myDisplayName(),handledAt:Date.now()});}
 function markWebReqConverted(o){
@@ -3402,6 +3424,7 @@ function deletePart(woid,idx){
   });
 }
 function openPartOrder(preSpecial){
+  PENDING_WEBREQ_PART=null;
   document.getElementById('po-mtitle').textContent=preSpecial?'Add Special Order Part':'Add Part';
   ['po-pn','po-desc','po-equip','po-notes'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('po-qty').value='1';document.getElementById('po-paid').checked=false;document.getElementById('po-special').checked=!!preSpecial;
@@ -3418,7 +3441,10 @@ function savePartOrder(){
     woId:null,woNum:null,vendor:document.getElementById('po-vendor').value||'',location:defaultLocation(),
     special:document.getElementById('po-special').checked,
     ordered:false,received:false,paid:document.getElementById('po-paid').checked,added:today(),addedBy:myDisplayName()};
+  if(PENDING_WEBREQ_PART&&WEBREQS[PENDING_WEBREQ_PART]&&(WEBREQS[PENDING_WEBREQ_PART].store==='Harrison'||WEBREQS[PENDING_WEBREQ_PART].store==='Yellville'))item.location=WEBREQS[PENDING_WEBREQ_PART].store;
   poAdd('other',item);
+  if(PENDING_WEBREQ_PART&&DB){DB.ref('web_requests/'+PENDING_WEBREQ_PART).update({status:'converted',handledBy:myDisplayName(),handledAt:Date.now()});}
+  PENDING_WEBREQ_PART=null;
   closeM('part-order-modal');renderPartOrders();
 }
 // Buttons pass the line itself (not its position), so a list that changed on another device can never make them hit the wrong part.
