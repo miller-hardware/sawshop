@@ -633,6 +633,9 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin:-6px 0 12px">
     <input type="checkbox" id="m-quick" style="width:15px;height:15px;accent-color:var(--red)"> &#9889; Quick job &mdash; about 30 min or less (plug, filter, pull cord, sharpen). Gets a &#9889; Quick label; stays in its place in line.
   </label>
+  <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;margin:-6px 0 12px">
+    <input type="checkbox" id="m-stock" style="width:15px;height:15px;accent-color:var(--red)"> &#127991; Shop-owned used unit (trade-in or resale). Once it&rsquo;s Ready you can post it to the website.
+  </label>
   <div class="g3" style="margin-bottom:0">
     <div class="f"><label>Location</label>
       <select id="m-location">
@@ -1032,7 +1035,7 @@ function stageAgeChip(o){
   return '<span class="stage-age'+(stageLate(o)?' late':'')+'" title="'+tip+'">'+(d===0?'Today':d+'d')+' in stage</span>';
 }
 function authChip(o){var a=parseFloat(o.authAmt);return a>0?'<span class="chip-auth" title="Customer approved repairs up to $'+a+' without a call">OK $'+a+'</span>':'';}
-function quickChip(o){return o.quick?'<span class="chip-quick" title="Quick job - about 30 min or less">&#9889; Quick</span>':'';}
+function quickChip(o){return (o.quick?'<span class="chip-quick" title="Quick job - about 30 min or less">&#9889; Quick</span>':'')+(o.stock?'<span class="chip-quick" style="background:#efe6f7;color:#4b2a6b" title="Shop-owned used unit">&#127991; '+(LISTINGS[o.id]?'On website':'Stock')+'</span>':'');}
 function setStatus(o,s){if(o.status!==s){o.status=s;o.statusTs=Date.now();}}
 function setSP(st,t){var p=document.getElementById('sync-pill');p.className='sync-pill '+st;p.querySelector('.dot').className='dot '+(st==='ok'?'g':st==='err'?'r':'a');document.getElementById('sync-txt').textContent=t;}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
@@ -1078,6 +1081,7 @@ function buildReminders(){
   var now=new Date();
   _pickedUpByCust=null;_pickedUpByCust=pickedUpIndex();   // fresh index for this pass
   custArr().forEach(function(c){
+    if(c.first==='Miller Hardware'&&c.last==='Shop Stock')return;   // shop-owned units don't get reminders
     var eq=custEquip(c.id);
     eq.forEach(function(e,i){
       var months=getIntervalMonths(e.type);
@@ -1289,6 +1293,7 @@ function startDataSync(){
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
   DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
   DB.ref('rental_waitlist').on('value',function(s){RENTAL_WAITLIST={};s.forEach(function(ch){RENTAL_WAITLIST[ch.key]=ch.val();});renderRentalCalendar();});
+  DB.ref('public_listings').on('value',function(s){LISTINGS={};s.forEach(function(ch){LISTINGS[ch.key]=ch.val();});},function(){});
   DB.ref('web_requests').on('value',function(s){WEBREQS={};s.forEach(function(ch){WEBREQS[ch.key]=ch.val();});webReqAlertCheck();renderWebReqs();},function(){/* no access yet: panel stays empty */});
 }
 var AUTH=null,CURRENT_USER=null;
@@ -1869,7 +1874,7 @@ function webReqAlertCheck(){
   webReqChime();
   if(window.Notification&&Notification.permission==='granted'){
     var r=WEBREQS[fresh[0]]||{};
-    try{var n=new Notification(({parts:'New website parts request',trade:'New website trade-in'})[r.kind]||'New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
+    try{var n=new Notification(({parts:'New website parts request',trade:'New website trade-in',reminder:'New tune-up reminder sign-up'})[r.kind]||'New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
       n.onclick=function(){window.focus();showTab('webreq');n.close();};}catch(e){}
   }
 }
@@ -1883,8 +1888,8 @@ function renderWebReqs(){
   var list=showAll?all:open;
   if(!list.length){box.innerHTML='<div style="color:var(--muted);padding:22px 4px">'+(showAll?'No web requests yet.':'No new web requests. Requests sent from the website’s Contact page show up here.')+'</div>';return;}
   box.innerHTML=list.map(function(r){
-    var kind=r.kind==='parts'?'parts':(r.kind==='trade'?'trade':'service');
-    var kindChip='<span style="background:'+({service:'#e8eef8',parts:'#fff3d6',trade:'#efe6f7'})[kind]+';color:#333;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+({service:'Service',parts:'Parts request',trade:'Trade-in'})[kind]+'</span>';
+    var kind=['parts','trade','reminder'].indexOf(r.kind)>=0?r.kind:'service';
+    var kindChip='<span style="background:'+({service:'#e8eef8',parts:'#fff3d6',trade:'#efe6f7',reminder:'#e3f3ea'})[kind]+';color:#333;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+({service:'Service',parts:'Parts request',trade:'Trade-in',reminder:'Tune-up reminder'})[kind]+'</span>';
     var equip=[r.brand,r.equipType,r.model].filter(Boolean).map(escHtml).join(' &middot; ')+(r.year?' &middot; '+escHtml(r.year):'')+(r.hours?' &middot; '+escHtml(r.hours)+' hrs':'');
     var state=r.status==='converted'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+(r.woNum?'WO #'+escHtml(r.woNum):'Part added')+'</span>'
       :r.status==='handled'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">Handled</span>'
@@ -1901,7 +1906,9 @@ function renderWebReqs(){
       +(r.status==='new'?'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
         +(kind==='service'?'<button class="btn sm primary" onclick="startWOFromWebReq(\''+r._id+'\')">Start work order</button>':'')
         +(kind==='parts'?'<button class="btn sm primary" onclick="partFromWebReq(\''+r._id+'\')">Add to Parts to Order</button>':'')
-        +(kind!=='service'?'<button class="btn sm primary" onclick="handleWebReq(\''+r._id+'\')">Mark handled</button>':'')
+        +(kind==='trade'?'<button class="btn sm primary" onclick="stockWOFromWebReq(\''+r._id+'\')">Took it in: start used-unit job</button>':'')
+        +(kind==='reminder'?'<button class="btn sm primary" onclick="reminderFromWebReq(\''+r._id+'\')">Add to Reminders</button>':'')
+        +(kind==='parts'||kind==='trade'?'<button class="btn sm '+(kind==='trade'?'outline':'primary')+'" onclick="handleWebReq(\''+r._id+'\')">Mark handled</button>':'')
         +'<button class="btn sm outline" onclick="dismissWebReq(\''+r._id+'\')">Dismiss</button></div>':'')
       +'</div>';
   }).join('');
@@ -1930,6 +1937,82 @@ function startWOFromWebReq(id){
     document.getElementById('c-phone').value=r.phone||'';
     document.getElementById('c-email').value=r.email||'';
   }
+}
+// ── Used units for resale: a shop-owned work order goes through repair, then gets posted to the website's Used equipment list.
+var LISTINGS={};
+function stockCustomerId(){
+  var k=Object.keys(CUSTS).filter(function(k){var c=CUSTS[k];return c.first==='Miller Hardware'&&c.last==='Shop Stock';})[0];
+  if(k)return k;
+  var c={id:genId(),first:'Miller Hardware',last:'Shop Stock',phone:'',email:'',addr:'',notes:'Used units the shop owns (trade-ins and resale). Not a real customer.'};
+  writeCust(c);CUSTS[c.id]=c;return c.id;
+}
+function stockPanelHTML(id,o){
+  if(!o.stock)return '';
+  var L=LISTINGS[id],box='<div style="background:#f6f1fa;border:1.5px solid #cdb6e0;border-radius:3px;padding:10px 12px;margin-bottom:10px;font-size:13px">';
+  if(L)return box+'<div style="font-weight:700">&#127991; Listed on the website at '+(L.price?'$'+escHtml(String(L.price)):'Call for price')+'</div>'
+    +'<div style="color:var(--muted);margin:2px 0 8px">Shows under Used equipment for '+escHtml(L.store==='harrison'?'Harrison':'Yellville')+'.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="openListing(\''+id+'\')">Edit listing</button><button class="btn sm primary" onclick="unlist(\''+id+'\',true)">Sold</button><button class="btn sm outline" onclick="unlist(\''+id+'\',false)">Take down</button></div></div>';
+  if(o.status==='Ready')return box+'<div style="font-weight:700;margin-bottom:6px">&#127991; Shop-owned unit, repaired and ready</div><button class="btn sm primary" onclick="openListing(\''+id+'\')">Post to website</button></div>';
+  return box+'<b>&#127991; Shop-owned unit.</b> <span style="color:var(--muted)">When the repair is done and it&rsquo;s marked Ready, a Post to website button shows up here.</span></div>';
+}
+function openListing(id){
+  var o=ORDERS[id];if(!o)return;var L=LISTINGS[id]||{};
+  var atts=(ATTACHMENTS[id]||[]).filter(function(a){return a.url&&/^https:\/\//.test(a.url);});
+  var chosen=L.photos||atts.slice(0,6).map(function(a){return a.url;});
+  var html='<div class="sect-lbl" style="margin-top:0">Post to website</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-bottom:10px">'+escHtml([o.year,o.brand,o.model||o.equipType].filter(Boolean).join(' '))+(o.hours?' &middot; '+escHtml(o.hours)+' hrs':'')+'</div>'
+    +'<div class="f"><label>Price ($)</label><input type="number" id="ls-price" min="0" step="1" value="'+escHtml(String(L.price||''))+'" placeholder="Leave blank for Call for price"></div>'
+    +'<div class="f"><label>Store it&rsquo;s at</label><select id="ls-store"><option value="harrison">Harrison</option><option value="yellville">Yellville</option></select></div>'
+    +'<div class="f"><label>Description for customers</label><textarea id="ls-desc" rows="3" maxlength="600" placeholder="New blades, fresh service, runs great.">'+escHtml(L.description||'')+'</textarea></div>'
+    +(atts.length?'<div class="df-lbl" style="margin:8px 0 4px">Photos to show (from this job)</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+atts.map(function(a,i){return '<label style="cursor:pointer;text-align:center"><img src="'+escHtml(a.url)+'" style="width:84px;height:84px;object-fit:cover;border-radius:3px;display:block"><input type="checkbox" class="ls-ph" value="'+i+'"'+(chosen.indexOf(a.url)>=0?' checked':'')+'></label>';}).join('')+'</div>'
+      :'<div style="font-size:12px;color:var(--muted);margin-top:6px">No photos on this job yet. Add some on the job first and they can go on the website too.</div>')
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn primary" onclick="saveListing(\''+id+'\')">'+(LISTINGS[id]?'Save listing':'Post it')+'</button><button class="btn outline" onclick="openDet(\''+id+'\')">Cancel</button></div>';
+  document.getElementById('det-body').innerHTML=html;
+  document.getElementById('ls-store').value=L.store||((o.location==='Harrison')?'harrison':'yellville');
+  window._lsAtts=atts;
+}
+function saveListing(id){
+  var o=ORDERS[id];if(!o||!DB)return;
+  var priceRaw=document.getElementById('ls-price').value.trim(),price=priceRaw?Math.round(parseFloat(priceRaw)):'';
+  if(priceRaw&&!(price>=0)){alert('Enter the price as a number, or leave it blank.');return;}
+  var photos=[].slice.call(document.querySelectorAll('.ls-ph:checked')).map(function(cb){return (window._lsAtts[+cb.value]||{}).url;}).filter(Boolean).slice(0,6);
+  var L={brand:(o.brand||'').slice(0,40),model:(o.model||o.equipType||'').slice(0,60),equipType:(o.equipType||'').slice(0,40),year:String(o.year||'').slice(0,4),hours:String(o.hours||'').replace(/[^0-9]/g,'').slice(0,6),
+    price:price,store:document.getElementById('ls-store').value,description:document.getElementById('ls-desc').value.trim().slice(0,600),photos:photos,
+    postedAt:(LISTINGS[id]&&LISTINGS[id].postedAt)||Date.now(),postedBy:myDisplayName()};
+  DB.ref('public_listings/'+id).set(L).then(function(){LISTINGS[id]=L;openDet(id);}).catch(function(e){alert('Could not post it: '+e.message);});
+}
+function unlist(id,sold){
+  if(!DB)return;
+  if(!confirm(sold?'Mark this unit sold? It comes off the website.':'Take this unit off the website?'))return;
+  DB.ref('public_listings/'+id).remove().then(function(){delete LISTINGS[id];
+    if(sold){var o=ORDERS[id];if(o){o.notes=(o.notes?o.notes+'\n':'')+'Sold '+today()+' (taken off website by '+myDisplayName()+')';writeOrderFields(o,['notes']);}}
+    openDet(id);});
+}
+function stockWOFromWebReq(id){
+  var r=WEBREQS[id];if(!r)return;
+  openNewWO();PENDING_WEBREQ=id;
+  document.getElementById('m-stock').checked=true;
+  var et=document.getElementById('m-etype');
+  if(r.equipType&&[].some.call(et.options,function(o){return o.value===r.equipType;}))et.value=r.equipType;
+  document.getElementById('m-brand').value=r.brand||'';document.getElementById('m-model').value=r.model||'';
+  document.getElementById('m-year').value=r.year||'';document.getElementById('m-hours').value=r.hours||'';
+  document.getElementById('m-notes').value='Trade-in from '+(r.name||'')+(r.phone?' ('+r.phone+')':'')+', website request '+webReqWhen(r.createdAt)+'.';
+  if(r.store==='Yellville'||r.store==='Harrison')document.getElementById('m-location').value=r.store;
+}
+// Tune-up reminder sign-ups from the website: add the person (or match them by phone) and log their machine,
+// so it shows up in Reminders when its season comes around.
+function reminderFromWebReq(id){
+  var r=WEBREQS[id];if(!r||!DB)return;
+  var d=webReqDigits(r.phone),cid=null;
+  if(d.length>=7)Object.keys(CUSTS).some(function(k){if(webReqDigits(CUSTS[k].phone)===d){cid=k;return true;}return false;});
+  if(!cid){var parts=String(r.name||'').trim().split(/\s+/);
+    var c={id:genId(),first:titleCase(parts.shift()||''),last:titleCase(parts.join(' ')),phone:formatPhone(r.phone||''),email:r.email||'',addr:'',notes:''};
+    writeCust(c);CUSTS[c.id]=c;cid=c.id;}
+  var eq={type:r.equipType||'Other',brand:r.brand||'',year:'',product:'',model:r.model||'',serial:'',engine:'',date:today(),rectype:'existing',warrantyLen:'',warrantyExp:'',warrantyNotes:'',notes:'Signed up on the website for tune-up reminders'};
+  var existing=EQUIPMENT[cid]||[];
+  if(!existing.some(function(e){return equipMatchKey(e)===equipMatchKey(eq);}))writeEquipment(cid,existing.concat([eq]));
+  DB.ref('web_requests/'+id).update({status:'converted',handledBy:myDisplayName(),handledAt:Date.now()});
+  openCustDet(cid);
 }
 function handleWebReq(id){if(!DB)return;DB.ref('web_requests/'+id).update({status:'handled',handledBy:myDisplayName(),handledAt:Date.now()});}
 var PENDING_WEBREQ_PART=null;
@@ -2127,7 +2210,7 @@ function openNewWO(){
   document.getElementById('m-location').value=defaultLocation();
   document.getElementById('m-tech').value='Unassigned';document.getElementById('m-etype').value='Chainsaw';
   document.getElementById('m-status').value='Intake';document.getElementById('m-datein').value=today();
-  document.getElementById('m-urg').checked=false;document.getElementById('m-quick').checked=false;document.getElementById('m-auth').value='';document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
+  document.getElementById('m-urg').checked=false;document.getElementById('m-quick').checked=false;document.getElementById('m-stock').checked=false;document.getElementById('m-auth').value='';document.getElementById('m-deposit').checked=false;document.getElementById('m-paid').checked=false;document.getElementById('m-notes-ts').textContent='';
   document.getElementById('pt-body').innerHTML='';document.getElementById('waiting-parts-row').style.display='none';
   renderEstSuggest();
   document.getElementById('wo-modal').classList.add('open');
@@ -2145,7 +2228,7 @@ function openEditWO(id){
   document.getElementById('m-notes').value=o.notes||'';document.getElementById('m-notes-ts').textContent=o.notesTs?'Last updated: '+o.notesTs:'';
   document.getElementById('m-status').value=o.status||'Intake';document.getElementById('m-datein').value=o.dateIn||'';
   document.getElementById('m-estdate').value=o.estDate||'';document.getElementById('m-dateout').value=o.dateOut||'';
-  document.getElementById('m-urg').checked=!!o.urgent;document.getElementById('m-quick').checked=!!o.quick;document.getElementById('m-auth').value=o.authAmt||'';document.getElementById('m-deposit').checked=!!o.deposit;document.getElementById('m-paid').checked=!!o.paid;document.getElementById('m-parts-waiting').value=o.partsWaiting||'';
+  document.getElementById('m-urg').checked=!!o.urgent;document.getElementById('m-quick').checked=!!o.quick;document.getElementById('m-stock').checked=!!o.stock;document.getElementById('m-auth').value=o.authAmt||'';document.getElementById('m-deposit').checked=!!o.deposit;document.getElementById('m-paid').checked=!!o.paid;document.getElementById('m-parts-waiting').value=o.partsWaiting||'';
   document.getElementById('m-tag').value=o.tag||'';
   document.getElementById('m-ticket').value=o.ticket||'';
   document.getElementById('m-location').value=o.location||'Yellville';
@@ -2164,7 +2247,7 @@ var _editBase=null,_woSaving=false;
 // Every field the work order form owns.
 function readWOForm(){
   var g=function(id){return document.getElementById(id).value;};
-  return {custId:g('m-cust'),tag:g('m-tag'),ticket:g('m-ticket'),location:g('m-location'),tech:g('m-tech'),equipType:g('m-etype'),brand:g('m-brand'),year:g('m-year'),product:g('m-product'),model:g('m-model'),serial:g('m-serial'),engine:g('m-engine'),hours:g('m-hours'),complaint:g('m-complaint'),notes:g('m-notes'),status:g('m-status'),quick:document.getElementById('m-quick').checked,authAmt:g('m-auth').trim(),dateIn:g('m-datein'),estDate:g('m-estdate'),dateOut:g('m-dateout'),urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:g('m-parts-waiting'),parts:getParts()};
+  return {custId:g('m-cust'),tag:g('m-tag'),ticket:g('m-ticket'),location:g('m-location'),tech:g('m-tech'),equipType:g('m-etype'),brand:g('m-brand'),year:g('m-year'),product:g('m-product'),model:g('m-model'),serial:g('m-serial'),engine:g('m-engine'),hours:g('m-hours'),complaint:g('m-complaint'),notes:g('m-notes'),status:g('m-status'),quick:document.getElementById('m-quick').checked,stock:document.getElementById('m-stock').checked,authAmt:g('m-auth').trim(),dateIn:g('m-datein'),estDate:g('m-estdate'),dateOut:g('m-dateout'),urgent:document.getElementById('m-urg').checked,deposit:document.getElementById('m-deposit').checked,paid:document.getElementById('m-paid').checked,partsWaiting:g('m-parts-waiting'),parts:getParts()};
 }
 // Compare two field values, treating blank/unset/false the same and ignoring number-vs-text differences in parts.
 function woFieldKey(f,v){
@@ -2186,7 +2269,9 @@ function allocateWoNum(cb){
 }
 function saveWO(){
   if(_woSaving)return;
-  var cid=document.getElementById('m-cust').value;if(!cid){alert('Please select a customer.');return;}
+  var cid=document.getElementById('m-cust').value;
+  if(!cid&&document.getElementById('m-stock').checked){cid=stockCustomerId();document.getElementById('m-cust').value=cid;}
+  if(!cid){alert('Please select a customer.');return;}
   var f=readWOForm(),stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
   if(!editWOid){
     // New job: get a number from the shared counter, then save the whole record.
@@ -2677,7 +2762,7 @@ function openDet(id){
   var lookupHtml='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 8px"><button type="button" class="btn sm outline" onclick="openPartsLookup(\''+id+'\',\'pt\')">&#128270; Parts Diagrams (PartsTree)</button><button type="button" class="btn sm outline" onclick="openPartsLookup(\''+id+'\',\'g\')">&#128270; Search Google</button></div>'+partHistoryHtml(id);
   document.getElementById('det-body').innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Work Order #'+o.woNum+(o.urgent?' &nbsp;<span class="badge b-urgent">Urgent</span>':'')+' &nbsp;'+stageAgeChip(o)+' '+quickChip(o)+'</div>'+(o.tag||o.ticket?'<div style="margin-top:3px">'+(o.tag?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Tag: '+escHtml(o.tag)+'</span>':'')+(o.tag&&o.ticket?'&nbsp;&nbsp;&middot;&nbsp;&nbsp;':'')+(o.ticket?'<span style="font-size:17px;font-weight:800;color:var(--dark)">Ticket #'+escHtml(o.ticket)+'</span>':'')+'</div>':'')+'<div style="font-size:21px;font-weight:800;margin-top:4px">'+(escHtml(c.first||'')+' '+escHtml(c.last||'')).trim()+'</div>'+(c.phone?'<div style="font-size:20px;font-weight:700;color:var(--dark);margin-top:3px">'+escHtml(c.phone)+'</div>':'')+'</div><div style="text-align:right">'+(o.dateIn?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">In: '+o.dateIn+'</div>':'')+(o.estDate?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Est: '+o.estDate+'</div>':'')+(o.dateOut?'<div style="font-size:14px;font-weight:600;color:var(--gray2)">Done: '+o.dateOut+'</div>':'')+(o.location||o.intakeBy?'<div style="font-size:14px;font-weight:700;color:var(--dark);margin-top:4px">'+(o.location||'')+(o.intakeBy?(o.location?' &middot; ':'')+'Taken in by '+o.intakeBy:'')+'</div>':'')+'<div style="font-size:17px;font-weight:800;margin-top:3px">'+escHtml(o.tech||'')+'</div></div></div>'
-    +custAlert+authHtml+wStatus+poHtml+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
+    +custAlert+authHtml+wStatus+poHtml+stockPanelHTML(id,o)+'<div class="sect-lbl" style="margin-top:0">Quick Status</div><div class="status-btns">'+sbtns+'</div><hr>'
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+escHtml(f[1])+'</div></div>';}).join('')+'</div>'
     +lookupHtml
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+escHtml(o.complaint)+'</div></div>':'')
