@@ -1880,7 +1880,7 @@ function webReqAlertCheck(){
   webReqChime();
   if(window.Notification&&Notification.permission==='granted'){
     var r=WEBREQS[fresh[0]]||{};
-    try{var n=new Notification(({parts:'New website parts request',trade:'New website trade-in',reminder:'New tune-up reminder sign-up'})[r.kind]||'New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
+    try{var n=new Notification(({parts:'New website parts request',trade:'New website trade-in',reminder:'New tune-up reminder sign-up',used:'New equipment question'})[r.kind]||'New website service request',{body:(fresh.length>1?fresh.length+' new requests. ':'')+(r.name||'')+' \u00b7 '+[r.brand,r.equipType].filter(Boolean).join(' ')+' \u00b7 '+(r.store||''),tag:'webreq'});
       n.onclick=function(){window.focus();showTab('webreq');n.close();};}catch(e){}
   }
 }
@@ -1894,8 +1894,8 @@ function renderWebReqs(){
   var list=showAll?all:open;
   if(!list.length){box.innerHTML='<div style="color:var(--muted);padding:22px 4px">'+(showAll?'No web requests yet.':'No new web requests. Requests sent from the website’s Contact page show up here.')+'</div>';return;}
   box.innerHTML=list.map(function(r){
-    var kind=['parts','trade','reminder'].indexOf(r.kind)>=0?r.kind:'service';
-    var kindChip='<span style="background:'+({service:'#e8eef8',parts:'#fff3d6',trade:'#efe6f7',reminder:'#e3f3ea'})[kind]+';color:#333;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+({service:'Service',parts:'Parts request',trade:'Trade-in',reminder:'Tune-up reminder'})[kind]+'</span>';
+    var kind=['parts','trade','reminder','used'].indexOf(r.kind)>=0?r.kind:'service';
+    var kindChip='<span style="background:'+({service:'#e8eef8',parts:'#fff3d6',trade:'#efe6f7',reminder:'#e3f3ea',used:'#fde8e8'})[kind]+';color:#333;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+({service:'Service',parts:'Parts request',trade:'Trade-in',reminder:'Tune-up reminder',used:'Equipment question'})[kind]+'</span>';
     var equip=[r.brand,r.equipType,r.model].filter(Boolean).map(escHtml).join(' &middot; ')+(r.year?' &middot; '+escHtml(r.year):'')+(r.hours?' &middot; '+escHtml(r.hours)+' hrs':'');
     var state=r.status==='converted'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">'+(r.woNum?'WO #'+escHtml(r.woNum):'Part added')+'</span>'
       :r.status==='handled'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">Handled</span>'
@@ -1914,7 +1914,7 @@ function renderWebReqs(){
         +(kind==='parts'?'<button class="btn sm primary" onclick="partFromWebReq(\''+r._id+'\')">Add to Parts to Order</button>':'')
         +(kind==='trade'?'<button class="btn sm primary" onclick="stockWOFromWebReq(\''+r._id+'\')">Took it in: start used-unit job</button>':'')
         +(kind==='reminder'?'<button class="btn sm primary" onclick="reminderFromWebReq(\''+r._id+'\')">Add to Reminders</button>':'')
-        +(kind==='parts'||kind==='trade'?'<button class="btn sm '+(kind==='trade'?'outline':'primary')+'" onclick="handleWebReq(\''+r._id+'\')">Mark handled</button>':'')
+        +(kind==='parts'||kind==='trade'||kind==='used'?'<button class="btn sm '+(kind==='trade'?'outline':'primary')+'" onclick="handleWebReq(\''+r._id+'\')">Mark handled</button>':'')
         +'<button class="btn sm outline" onclick="dismissWebReq(\''+r._id+'\')">Dismiss</button></div>':'')
       +'</div>';
   }).join('');
