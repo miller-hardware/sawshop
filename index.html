@@ -325,6 +325,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <div class="navbar">
     <div class="tabs">
       <div class="tab active" onclick="showTab('board')">Shop Load</div>
+      <div class="tab" onclick="showTab('webreq')">&#127760; Web Requests <span class="tab-badge" id="webreq-badge" style="display:none">0</span></div>
       <div class="tab" onclick="showTab('customers')">Customers</div>
       <div class="tab" onclick="showTab('daily')">📞 Pickup &amp; Report</div>
       <div class="tab" onclick="showTab('reminders')">Reminders <span class="tab-badge" id="reminder-badge" style="display:none">0</span></div>
@@ -366,6 +367,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <div class="board-wrap"><div class="board" id="board-inner"></div></div>
   </div>
 
+  <div class="view" id="tab-webreq">
+    <div class="srow" style="margin-bottom:8px;align-items:center;gap:10px">
+      <b style="font-size:16px">Service requests from the website</b>
+      <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-left:auto"><input type="checkbox" id="webreq-showall" onchange="renderWebReqs()"> Show handled</label>
+    </div>
+    <div id="webreq-list"></div>
+  </div>
   <div class="view" id="tab-orders">
     <div class="srow">
       <input type="text" id="wo-q" placeholder="Search customer, brand, model, serial, WO#..." oninput="renderOrders()">
@@ -1280,6 +1288,7 @@ function startDataSync(){
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
   DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
   DB.ref('rental_waitlist').on('value',function(s){RENTAL_WAITLIST={};s.forEach(function(ch){RENTAL_WAITLIST[ch.key]=ch.val();});renderRentalCalendar();});
+  DB.ref('web_requests').on('value',function(s){WEBREQS={};s.forEach(function(ch){WEBREQS[ch.key]=ch.val();});renderWebReqs();},function(){/* no access yet: panel stays empty */});
 }
 var AUTH=null,CURRENT_USER=null;
 function showLogin(){var l=document.getElementById('login-screen');if(l)l.style.display='flex';var a=document.querySelector('.app');if(a)a.style.visibility='hidden';var f=document.querySelector('.fab');if(f)f.style.display='none';}
@@ -1820,12 +1829,74 @@ function refreshAll(){
   },60);
 }
 
+// ── Web requests: service requests sent from the Miller Hardware website (miller-hardware.github.io/contact.html).
+// The website can only ADD to web_requests (see the database rules); staff read them here and turn them into work orders.
+var WEBREQS={},PENDING_WEBREQ=null;
+function webReqWhen(t){if(!t)return'';var d=new Date(t);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function renderWebReqs(){
+  var badge=document.getElementById('webreq-badge'),box=document.getElementById('webreq-list');
+  var all=Object.keys(WEBREQS).map(function(k){var r=WEBREQS[k]||{};r._id=k;return r;}).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0);});
+  var open=all.filter(function(r){return r.status==='new';});
+  if(badge){badge.textContent=open.length;badge.style.display=open.length?'':'none';}
+  if(!box)return;
+  var showAll=document.getElementById('webreq-showall')&&document.getElementById('webreq-showall').checked;
+  var list=showAll?all:open;
+  if(!list.length){box.innerHTML='<div style="color:var(--muted);padding:22px 4px">'+(showAll?'No web requests yet.':'No new web requests. Requests sent from the website’s Contact page show up here.')+'</div>';return;}
+  box.innerHTML=list.map(function(r){
+    var equip=[r.brand,r.equipType,r.model].filter(Boolean).map(escHtml).join(' &middot; ');
+    var state=r.status==='converted'?'<span style="background:#e6f3e3;color:#2d7d1e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">WO #'+escHtml(r.woNum||'')+'</span>'
+      :(r.status==='dismissed'?'<span style="background:var(--off);color:var(--muted);font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">Dismissed</span>'
+      :'<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">New</span>');
+    var tel=String(r.phone||'').replace(/[^0-9+]/g,'');
+    return '<div style="background:var(--white);border:1.5px solid var(--silver);border-left:4px solid var(--red);border-radius:4px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center"><b style="font-size:16px">'+escHtml(r.name||'')+'</b>'+state
+      +'<span style="color:var(--muted);font-size:13px">'+escHtml(r.store||'')+' &middot; '+webReqWhen(r.createdAt)+(r.dropoff?' &middot; '+escHtml(r.dropoff):'')+'</span></div>'
+      +(equip?'<div style="margin-top:6px;font-weight:600">'+equip+(r.serial?' &middot; SN '+escHtml(r.serial):'')+'</div>':'')
+      +'<div style="margin-top:6px;white-space:pre-line">'+escHtml(r.problem||'')+'</div>'
+      +'<div style="margin-top:8px;font-weight:600">'+(tel?'<a href="tel:'+escHtml(tel)+'">'+escHtml(r.phone)+'</a>':'')+(r.email?' &nbsp;&middot;&nbsp; <a href="mailto:'+escHtml(r.email)+'">'+escHtml(r.email)+'</a>':'')+'</div>'
+      +(r.status==='new'?'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" onclick="startWOFromWebReq(\''+r._id+'\')">Start work order</button><button class="btn sm outline" onclick="dismissWebReq(\''+r._id+'\')">Dismiss</button></div>':'')
+      +'</div>';
+  }).join('');
+}
+function webReqDigits(p){return String(p||'').replace(/\D/g,'').slice(-10);}
+function startWOFromWebReq(id){
+  var r=WEBREQS[id];if(!r)return;
+  openNewWO();PENDING_WEBREQ=id;
+  var et=document.getElementById('m-etype');
+  if(r.equipType&&[].some.call(et.options,function(o){return o.value===r.equipType;}))et.value=r.equipType;
+  document.getElementById('m-brand').value=r.brand||'';
+  document.getElementById('m-model').value=r.model||'';
+  document.getElementById('m-serial').value=r.serial||'';
+  document.getElementById('m-complaint').value=r.problem||'';
+  document.getElementById('m-notes').value='From website request'+(r.dropoff?' ('+r.dropoff+')':'')+', '+webReqWhen(r.createdAt)+'.';
+  if(r.store==='Yellville'||r.store==='Harrison')document.getElementById('m-location').value=r.store;
+  // Existing customer with the same phone number? Pick them. Otherwise open New Customer already filled in.
+  var d=webReqDigits(r.phone),match=null;
+  if(d.length>=7)Object.keys(CUSTS).some(function(k){if(webReqDigits(CUSTS[k].phone)===d){match=k;return true;}return false;});
+  if(match){custSelect(match);}
+  else{
+    openNewCustFromWO();
+    var parts=String(r.name||'').trim().split(/\s+/);
+    document.getElementById('c-first').value=parts.shift()||'';
+    document.getElementById('c-last').value=parts.join(' ');
+    document.getElementById('c-phone').value=r.phone||'';
+    document.getElementById('c-email').value=r.email||'';
+  }
+}
+function dismissWebReq(id){if(!DB)return;if(!confirm('Dismiss this web request? It stays in the list under "Show handled".'))return;DB.ref('web_requests/'+id).update({status:'dismissed',handledBy:myDisplayName(),handledAt:Date.now()});}
+function markWebReqConverted(o){
+  if(!PENDING_WEBREQ||!DB)return;
+  DB.ref('web_requests/'+PENDING_WEBREQ).update({status:'converted',woNum:o.woNum,woId:o.id,handledBy:myDisplayName(),handledAt:Date.now()});
+  PENDING_WEBREQ=null;
+}
+
 function showTab(t){
-  var tabs=['board','customers','daily','reminders','parts','orders','rental','settings'];
+  var tabs=['board','webreq','customers','daily','reminders','parts','orders','rental','settings'];
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('active',tabs[i]===t);});
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='board')renderBoard();
+  if(t==='webreq')renderWebReqs();
   if(t==='customers')renderCustomers();
   if(t==='orders')renderOrders();
   if(t==='rental')renderRentalFleet();
@@ -1992,6 +2063,7 @@ function openGuide(){var b=document.getElementById('guide-body');if(b)b.innerHTM
 function closeGuide(){var g=document.getElementById('guide-overlay');if(g)g.style.display='none';}
 function printGuide(){var pa=document.getElementById('print-area');pa.innerHTML='<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:22px;color:#1a1a1a">'+buildGuideHTML(true)+'</div>';pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 function openNewWO(){
+  PENDING_WEBREQ=null;
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateTechSels();
   ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
@@ -2065,7 +2137,7 @@ function saveWO(){
     allocateWoNum(function(num){
       _woSaving=false;if(btn){btn.disabled=false;btn.textContent='Save Work Order';}
       var o=Object.assign({id:genId(),woNum:num,intakeBy:myDisplayName(),notesTs:f.notes?stamp:'',statusTs:Date.now()},f);
-      writeOrder(o);syncEquipmentFromOrder(o);closeM('wo-modal');
+      writeOrder(o);syncEquipmentFromOrder(o);markWebReqConverted(o);closeM('wo-modal');
     });
     return;
   }
