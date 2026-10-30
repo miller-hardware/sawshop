@@ -1293,6 +1293,7 @@ function startDataSync(){
   DB.ref('rental_units').on('value',function(s){RENTAL_UNITS={};s.forEach(function(ch){RENTAL_UNITS[ch.key]=ch.val();});renderRentalFleet();});
   DB.ref('rental_bookings').on('value',function(s){RENTAL_BOOKINGS={};s.forEach(function(ch){RENTAL_BOOKINGS[ch.key]=ch.val();});renderRentalCalendar();});
   DB.ref('rental_waitlist').on('value',function(s){RENTAL_WAITLIST={};s.forEach(function(ch){RENTAL_WAITLIST[ch.key]=ch.val();});renderRentalCalendar();});
+  setTimeout(backupNag,8000);
   DB.ref('public_listings').on('value',function(s){LISTINGS={};s.forEach(function(ch){LISTINGS[ch.key]=ch.val();});},function(){});
   DB.ref('web_requests').on('value',function(s){WEBREQS={};s.forEach(function(ch){WEBREQS[ch.key]=ch.val();});webReqAlertCheck();renderWebReqs();},function(){/* no access yet: panel stays empty */});
 }
@@ -3050,10 +3051,22 @@ function exportCSV(type){
   var csv='﻿'+rows.map(function(r){return r.map(csvCell).join(',');}).join('\r\n');
   dl('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),fn);
 }
+// Weekly backup reminder: shows a bar at the top until someone on this team downloads a backup that week.
+function markBackedUp(){var t=Date.now();SETTINGS.lastBackup=t;if(DB)DB.ref('settings/lastBackup').set(t);var b=document.getElementById('backup-nag');if(b)b.remove();}
+function backupNag(){
+  if(!CURRENT_USER||document.getElementById('backup-nag'))return;
+  var last=parseInt(SETTINGS.lastBackup)||0;if(Date.now()-last<7*86400000)return;
+  var bar=document.createElement('div');bar.id='backup-nag';
+  bar.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1a1a1a;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px';
+  bar.innerHTML='<span style="flex:1;min-width:200px">&#128190; <b>Weekly backup due.</b> '+(last?'Last one was '+new Date(last).toLocaleDateString()+'.':'No backup on record yet.')+' Save it to the computer (or a USB drive).</span>'
+    +'<button class="btn sm primary" onclick="exportJSON()">Download backup</button><button class="btn sm outline" style="color:#fff;border-color:#888" onclick="this.parentNode.remove()">Later</button>';
+  document.body.appendChild(bar);
+}
 // Full backup = every saw shop data section, including ones not kept in memory (signatures are fetched just for the backup).
 function exportJSON(){
   var data={exported:new Date().toISOString(),orders:ORDERS,customers:CUSTS,techs:TECHS,vendors:VENDORS,equipment:EQUIPMENT,attachments:ATTACHMENTS,contactlogs:CONTACTLOGS,partorders:PARTORDERS,settings:SETTINGS,svcIntervals:SVC_INTERVALS,rental_units:RENTAL_UNITS,rental_bookings:RENTAL_BOOKINGS,rental_waitlist:RENTAL_WAITLIST};
-  function save(){var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob);dl(url,'sawshop-backup-'+today()+'.json');setTimeout(function(){URL.revokeObjectURL(url);},4000);}
+  data.web_requests=WEBREQS;data.public_listings=LISTINGS;
+  function save(){markBackedUp();var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob);dl(url,'sawshop-backup-'+today()+'.json');setTimeout(function(){URL.revokeObjectURL(url);},4000);}
   if(!DB){save();return;}
   DB.ref('signatures').once('value').then(function(s){data.signatures=s.val()||{};save();})
     .catch(function(e){data.signatures_error='Could not include signatures: '+e.message;save();});
