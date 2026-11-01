@@ -6,6 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="intake-trees.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -135,6 +136,39 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 .rm-att{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700}
 .upload-zone{border:2px dashed var(--silver);border-radius:3px;padding:12px;text-align:center;font-size:13px;color:var(--muted);cursor:pointer;margin-top:8px}
 .upload-zone:hover{border-color:var(--red);color:var(--red)}
+.req-mark{color:var(--red)}
+.f input.req-miss{border-color:var(--red);background:#fdeaea}
+#wo-req-msg{display:none;background:#fdeaea;border:1.5px solid var(--red);color:#7a0000;border-radius:3px;padding:8px 12px;font-size:14px;font-weight:600;margin-bottom:10px}
+.iq-launch{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.iq-launch .btn{font-weight:700}
+.iq-note{font-size:12px;color:var(--muted)}
+.iq-note b{color:#1a5c0a}
+#iq-panel{border:2px solid var(--red);border-radius:4px;padding:14px;margin:4px 0 12px;background:var(--white)}
+.iq-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:6px}
+.iq-bar{flex:1;height:5px;background:var(--off);border-radius:3px;overflow:hidden}.iq-bar i{display:block;height:100%;background:var(--red)}
+.iq-q{font-size:20px;font-weight:700;line-height:1.25;margin:4px 0 10px}
+.iq-who{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#FAEEDA;color:#633806;padding:2px 7px;border-radius:3px;margin-bottom:4px}
+.iq-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.iq-opt{border:2px solid var(--silver);background:var(--white);border-radius:4px;padding:12px;font-size:15px;font-weight:600;text-align:left;cursor:pointer;color:var(--dark);min-height:52px}
+.iq-opt:hover{border-color:var(--red)}
+.iq-opt.on{border-color:var(--red);background:#fdeaea}
+.iq-opt .iq-web{display:block;font-size:11px;font-weight:600;color:#1a5c0a;margin-top:3px}
+.iq-more{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.iq-more input{flex:1;min-width:160px}
+.iq-sum{background:var(--off);border-left:4px solid var(--red);padding:10px 12px;font-size:15px;line-height:1.5;margin:6px 0 10px}
+.iq-checks{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.iq-chk{font-size:12px;padding:3px 8px;border-radius:3px;background:#eaf3de;color:#1a5c0a;font-weight:600}
+.iq-chk.warn{background:#FAEEDA;color:#633806}
+.iq-ans{font-size:13px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:3px 12px;margin-top:6px}
+.iq-ans span:nth-child(odd){color:var(--muted)}
+.att-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.att-btns .upload-zone{flex:1;min-width:140px;margin-top:0;font-size:14px;font-weight:600}
+.attach-thumb{vertical-align:top;width:84px}
+.attach-thumb .att-pdf{width:68px;height:68px;border-radius:3px;border:1.5px solid var(--silver);display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--off);cursor:pointer;font-weight:700;font-size:13px;color:var(--red)}
+.attach-thumb .att-pdf small{font-weight:400;font-size:10px;color:var(--muted);max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-cap{font-size:10.5px;line-height:1.25;color:var(--muted);margin-top:2px;width:76px;overflow:hidden}
+.att-cap b{display:block;color:var(--dark);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att-busy{font-size:12px;color:var(--muted);padding:6px 0;font-style:italic}
 .equip-card{background:var(--off);border:1.5px solid var(--silver);border-radius:3px;padding:10px 12px;margin-bottom:8px;position:relative}
 .equip-card .eq-badge{position:absolute;top:8px;right:8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:55%}
 .equip-card .eq-brand{font-size:16px;font-weight:700;padding-right:80px}
@@ -657,13 +691,13 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <option>Auger</option><option>Other</option>
       </select>
     </div>
-    <div class="f"><label>Brand</label><input type="text" id="m-brand" placeholder="e.g. Stihl, Husqvarna..."></div>
+    <div class="f"><label>Brand <span class="req-mark">*</span></label><input type="text" id="m-brand" placeholder="e.g. Stihl, Husqvarna..."></div>
     <div class="f"><label>Year</label><input type="text" id="m-year" placeholder="e.g. 2019"></div>
   </div>
   <div class="g4">
     <div class="f"><label>Product Number</label><input type="text" id="m-product" placeholder="e.g. 1141 200 0470"></div>
-    <div class="f"><label>Model Number</label><input type="text" id="m-model" placeholder="e.g. MS 271"></div>
-    <div class="f"><label>Serial Number</label><input type="text" id="m-serial" placeholder="e.g. 129184732"></div>
+    <div class="f"><label>Model Number <span class="req-mark">*</span></label><input type="text" id="m-model" placeholder="e.g. MS 271"></div>
+    <div class="f"><label>Serial Number <span class="req-mark">*</span></label><input type="text" id="m-serial" placeholder="e.g. 129184732"><label style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--gray2);cursor:pointer"><input type="checkbox" id="m-noserial" style="width:15px;height:15px;accent-color:var(--red)" onchange="document.getElementById('m-serial').disabled=this.checked;woReqClear()"> No serial plate / can&rsquo;t read it</label></div>
     <div class="f"><label>Engine Size / Type</label><input type="text" id="m-engine" placeholder="e.g. 50.2cc, 22HP"></div>
   </div>
   <div class="g2">
@@ -674,6 +708,8 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   <div class="wo-col"><!-- RIGHT column -->
   <div class="sect-lbl" style="margin-top:0">Work Details</div>
   <div class="f"><label>Customer Approved Repairs Up To $</label><input type="number" id="m-auth" min="0" step="5" inputmode="numeric" placeholder="Ask at drop-off. Blank = call before repairing"><div style="font-size:11px;color:var(--muted);margin-top:3px">Ask the customer: &ldquo;Can we go ahead with repairs up to $___ without calling you?&rdquo;</div></div>
+  <div class="iq-launch"><button type="button" class="btn primary sm" id="iq-start" onclick="iqStart()">&#10067; Ask the intake questions</button><span class="iq-note" id="iq-note">Walks through what the tech needs for this kind of machine.</span></div>
+  <div id="iq-panel" style="display:none"></div>
   <div class="f"><label>Customer Complaint</label><textarea id="m-complaint" placeholder="What is the customer reporting?"></textarea></div>
   <div class="f">
     <label>Tech Notes / Diagnosis</label>
@@ -703,6 +739,15 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
   </div>
   </div><!-- /RIGHT column -->
   </div><!-- /wo-cols -->
+  <div class="sect-lbl">Photos &amp; Attachments</div>
+  <div style="font-size:12px;color:var(--muted)">Serial plate, damage, anything worth remembering. They upload when you save.</div>
+  <div id="m-att-thumbs" style="margin-top:4px"></div>
+  <div class="att-btns">
+    <div class="upload-zone" onclick="document.getElementById('m-att-cam').click()">&#128247; Take photo</div>
+    <div class="upload-zone" onclick="document.getElementById('m-att-pick').click()">&#128206; Choose photos or files</div>
+  </div>
+  <input type="file" id="m-att-cam" accept="image/*" capture="environment" style="display:none" onchange="queueFormAtts(this)">
+  <input type="file" id="m-att-pick" accept="image/*,application/pdf" multiple style="display:none" onchange="queueFormAtts(this)">
   <hr>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Parts &amp; Labor</div>
@@ -712,6 +757,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
     <thead><tr><th style="width:40%">Description</th><th style="width:12%">Qty</th><th style="width:48%">Notes / Comments</th></tr></thead>
     <tbody id="pt-body"></tbody>
   </table>
+  <div id="wo-req-msg"></div>
   <div class="mfoot">
     <button class="btn" onclick="closeM('wo-modal')">Cancel</button>
     <button class="btn del sm" id="wo-del-btn" onclick="delWO()" style="display:none">Delete</button>
@@ -1908,7 +1954,8 @@ function renderWebReqs(){
       +'<span style="color:var(--muted);font-size:13px">'+escHtml(r.store||'')+' &middot; '+webReqWhen(r.createdAt)+(r.dropoff?' &middot; '+escHtml(r.dropoff):'')+'</span></div>'
       +(equip?'<div style="margin-top:6px;font-weight:600">'+equip+(r.serial?' &middot; SN '+escHtml(r.serial):'')+'</div>':'')
       +(r.part?'<div style="margin-top:6px"><b>Part needed:</b> '+escHtml(r.part)+'</div>':'')
-      +'<div style="margin-top:6px;white-space:pre-line">'+escHtml(r.problem||'')+'</div>'
+      +'<div style="margin-top:6px;white-space:pre-line">'+escHtml(window.INTAKE?INTAKE.strip(r.problem):(r.problem||''))+'</div>'
+      +(window.INTAKE&&INTAKE.decode(r.problem)?'<div style="margin-top:6px;font-size:12px;font-weight:700;color:#1a5c0a">&#10003; Answered the intake questions online. They\u2019ll be filled in when you start the work order.</div>':'')
       +'<div style="margin-top:8px;font-weight:600">'+(tel?'<a href="tel:'+escHtml(tel)+'">'+escHtml(r.phone)+'</a>':'')+(r.email?' &nbsp;&middot;&nbsp; <a href="mailto:'+escHtml(r.email)+'">'+escHtml(r.email)+'</a>':'')+'</div>'
       +(r.status==='new'?'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
         +(kind==='service'?'<button class="btn sm primary" onclick="startWOFromWebReq(\''+r._id+'\')">Start work order</button>':'')
@@ -1929,7 +1976,10 @@ function startWOFromWebReq(id){
   document.getElementById('m-brand').value=r.brand||'';
   document.getElementById('m-model').value=r.model||'';
   document.getElementById('m-serial').value=r.serial||'';
-  document.getElementById('m-complaint').value=r.problem||'';
+  // Website answers come in as: sentence, "Customer said: ...", "Their answers:" list, and a code line. The list is for the Web Requests card; the complaint gets the sentence and their own words.
+  document.getElementById('m-complaint').value=(window.INTAKE?INTAKE.strip(r.problem).split(/\n\nTheir answers:\n/)[0]:r.problem)||'';
+  var pre=window.INTAKE?INTAKE.decode(r.problem):null;
+  if(pre){IQ.prefill=pre;IQ.prefill.sentence=INTAKE.strip(r.problem).split('\n\n')[0];var nAns=Object.keys(pre.answers).length;document.getElementById('iq-note').innerHTML='<b>The customer answered '+nAns+' question'+(nAns===1?'':'s')+' online.</b> Ask the questions to confirm them and do the hands-on checks.';}
   document.getElementById('m-notes').value='From website request'+(r.dropoff?' ('+r.dropoff+')':'')+', '+webReqWhen(r.createdAt)+'.';
   if(r.store==='Yellville'||r.store==='Harrison')document.getElementById('m-location').value=r.store;
   // Existing customer with the same phone number? Pick them. Otherwise open New Customer already filled in.
@@ -1964,7 +2014,7 @@ function stockPanelHTML(id,o){
 }
 function openListing(id){
   var o=ORDERS[id];if(!o)return;var L=LISTINGS[id]||{};
-  var atts=(ATTACHMENTS[id]||[]).filter(function(a){return a.url&&/^https:\/\//.test(a.url);});
+  var atts=(ATTACHMENTS[id]||[]).filter(function(a){return a.url&&/^https:\/\//.test(a.url)&&!attIsPdf(a);});
   var chosen=L.photos||atts.slice(0,6).map(function(a){return a.url;});
   var html='<div class="sect-lbl" style="margin-top:0">Post to website</div>'
     +'<div style="font-size:13px;color:var(--muted);margin-bottom:10px">'+escHtml([o.year,o.brand,o.model||o.equipType].filter(Boolean).join(' '))+(o.hours?' &middot; '+escHtml(o.hours)+' hrs':'')+'</div>'
@@ -2210,7 +2260,7 @@ function openGuide(){var b=document.getElementById('guide-body');if(b)b.innerHTM
 function closeGuide(){var g=document.getElementById('guide-overlay');if(g)g.style.display='none';}
 function printGuide(){var pa=document.getElementById('print-area');pa.innerHTML='<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:22px;color:#1a1a1a">'+buildGuideHTML(true)+'</div>';pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 function openNewWO(){
-  PENDING_WEBREQ=null;
+  PENDING_WEBREQ=null;clearFormAtts();iqReset(null);woReqClear();document.getElementById('m-noserial').checked=false;document.getElementById('m-serial').disabled=false;
   editWOid=null;document.getElementById('wo-mtitle').textContent='New Work Order';document.getElementById('wo-del-btn').style.display='none';
   populateTechSels();
   ['m-brand','m-year','m-product','m-model','m-serial','m-engine','m-hours','m-complaint','m-notes','m-estdate','m-dateout','m-parts-waiting','m-tag','m-ticket'].forEach(function(id){document.getElementById(id).value='';});custClear();
@@ -2223,7 +2273,7 @@ function openNewWO(){
   document.getElementById('wo-modal').classList.add('open');
 }
 function openEditWO(id){
-  var o=ORDERS[id];if(!o)return;editWOid=id;
+  var o=ORDERS[id];if(!o)return;editWOid=id;clearFormAtts();woReqClear();document.getElementById('m-noserial').checked=!!o.noSerial;document.getElementById('m-serial').disabled=!!o.noSerial;iqReset(o.intake&&o.intake.log?{tree:o.intake.tree,log:o.intake.log}:null);
   _editBase=JSON.parse(JSON.stringify(o));   // snapshot of the job as it was when the form opened (to detect other people's edits)
   document.getElementById('wo-mtitle').textContent='Edit WO #'+o.woNum;document.getElementById('wo-del-btn').style.display='';
   populateTechSels();
@@ -2280,13 +2330,16 @@ function saveWO(){
   if(!cid&&document.getElementById('m-stock').checked){cid=stockCustomerId();document.getElementById('m-cust').value=cid;}
   if(!cid){alert('Please select a customer.');return;}
   var f=readWOForm(),stamp=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  if(!editWOid&&!woReqCheck())return;
   if(!editWOid){
     // New job: get a number from the shared counter, then save the whole record.
     _woSaving=true;var btn=document.getElementById('wo-save-btn');if(btn){btn.disabled=true;btn.textContent='Saving…';}
     allocateWoNum(function(num){
       _woSaving=false;if(btn){btn.disabled=false;btn.textContent='Save Work Order';}
       var o=Object.assign({id:genId(),woNum:num,intakeBy:myDisplayName(),notesTs:f.notes?stamp:'',statusTs:Date.now()},f);
-      writeOrder(o);syncEquipmentFromOrder(o);markWebReqConverted(o);closeM('wo-modal');
+      if(IQ.result)o.intake=IQ.result;
+      if(document.getElementById('m-noserial').checked)o.noSerial=true;
+      writeOrder(o);syncEquipmentFromOrder(o);markWebReqConverted(o);flushFormAtts(o.id,o.status||'Intake');closeM('wo-modal');
     });
     return;
   }
@@ -2307,6 +2360,8 @@ function saveWO(){
     }
   }
   var up={};changed.forEach(function(k){up[k]=f[k];});
+  if(IQ.result){up.intake=IQ.result;if(changed.indexOf('intake')<0)changed.push('intake');}
+  var ns=document.getElementById('m-noserial').checked;if(ns!==!!cur.noSerial){up.noSerial=ns;changed.push('noSerial');}
   if(changed.indexOf('status')>=0)up.statusTs=Date.now();
   if(changed.indexOf('notes')>=0)up.notesTs=stamp;
   var merged=Object.assign({},cur,up,{id:id});
@@ -2314,7 +2369,7 @@ function saveWO(){
     if(DB){DB.ref('orders/'+id).update(up);writePublicStatus(merged);}
     else{ORDERS[id]=merged;saveLocal();refreshAll();}
   }
-  syncEquipmentFromOrder(merged);_editBase=null;closeM('wo-modal');
+  syncEquipmentFromOrder(merged);flushFormAtts(id,merged.status||'Intake');_editBase=null;closeM('wo-modal');
 }
 // ── Every work order automatically logs its equipment on the customer's record as "Serviced by Miller Hardware" (same shape as "Log Equipment", different record type than an actual sale), deduped so repeat visits for the same unit don't pile up. ──
 function equipMatchKey(e){
@@ -2743,14 +2798,121 @@ function newWOForCustEquip(cid,eqIdx){
   closeM('det-modal');
 }
 
+// ── Intake questions: a question tree per kind of machine (intake-trees.js). The counter gathers facts and does
+// safe checks; it never names a cause. Answers become one plain sentence in Customer Complaint, plus a
+// "Counter checks" list and the full answers saved on the job (o.intake). Website answers pre-fill it.
+// New repair work orders need brand, model and serial (or "No serial plate" checked). Quick jobs are exempt;
+// older jobs can still be edited and saved without them.
+function woReqClear(){['m-brand','m-model','m-serial'].forEach(function(id){var e=document.getElementById(id);if(e)e.classList.remove('req-miss');});var m=document.getElementById('wo-req-msg');if(m)m.style.display='none';}
+function woReqCheck(){
+  woReqClear();
+  if(document.getElementById('m-quick').checked)return true;
+  var need=[['m-brand','brand'],['m-model','model number']];
+  if(!document.getElementById('m-noserial').checked)need.push(['m-serial','serial number']);
+  var miss=need.filter(function(f){return !document.getElementById(f[0]).value.trim();});
+  if(!miss.length)return true;
+  miss.forEach(function(f){document.getElementById(f[0]).classList.add('req-miss');});
+  var names=miss.map(function(f){return f[1];});
+  var m=document.getElementById('wo-req-msg');
+  m.textContent='Add the '+(names.length>1?names.slice(0,-1).join(', ')+' and '+names.slice(-1):names[0])+' to save.'+(miss.some(function(f){return f[0]==='m-serial';})?' No plate or can’t read it? Check the box under Serial Number.':'')+' Quick jobs don’t need these.';
+  m.style.display='block';
+  var first=document.getElementById(miss[0][0]);first.scrollIntoView({block:'center'});first.focus();
+  return false;
+}
+['m-brand','m-model','m-serial'].forEach(function(id){document.addEventListener('input',function(e){if(e.target&&e.target.id===id)e.target.classList.remove('req-miss');});});
+var IQ={log:[],cur:null,type:'',result:null,prefill:null,multi:[]};
+function iqReset(pre){
+  IQ={log:[],cur:null,type:'',result:null,prefill:null,multi:[]};
+  if(pre&&pre.log){var a={};pre.log.forEach(function(x){a[x.id]=x;});IQ.prefill={tree:pre.tree,answers:a,fromJob:true};}
+  var p=document.getElementById('iq-panel');if(p){p.style.display='none';p.innerHTML='';}
+  var n=document.getElementById('iq-note');if(n)n.textContent=pre?'Already answered. Ask again to update the answers.':'Walks through what the tech needs for this kind of machine.';
+}
+function iqTree(){return window.INTAKE?INTAKE.treeFor(IQ.type):null;}
+function iqStart(){
+  if(!window.INTAKE){alert('The intake questions didn’t load. Check the connection and reload.');return;}
+  IQ.type=document.getElementById('m-etype').value;IQ.log=[];IQ.result=null;
+  if(IQ.prefill&&IQ.prefill.tree!==INTAKE.treeId(IQ.type))IQ.prefill=null;   // different kind of machine now
+  var t=iqTree();IQ.cur=INTAKE.firstShown(t,t.start,false);
+  document.getElementById('iq-panel').style.display='block';iqDraw();
+}
+function iqPre(id){return IQ.prefill&&IQ.prefill.answers[id]||null;}
+function iqDraw(){
+  var p=document.getElementById('iq-panel'),t=iqTree();if(!p||!t)return;
+  if(IQ.cur==='END'){iqFinish();return;}
+  var n=t.nodes[IQ.cur],pre=iqPre(IQ.cur),opts=INTAKE.optsFor(n,IQ.type),step=IQ.log.length+1;
+  var total=Math.max(step,Object.keys(t.nodes).length*0.55);
+  IQ.multi=n.multi?(pre&&pre.pick?pre.pick.slice():[]):[];
+  var web=function(o){return pre&&!IQ.prefill.fromJob&&pre.pick&&pre.pick.indexOf(o.l)>=0?'<span class="iq-web">Customer said this online</span>':(pre&&IQ.prefill.fromJob&&pre.pick&&pre.pick.indexOf(o.l)>=0?'<span class="iq-web">Answered before</span>':'');};
+  var h='<div class="iq-top"><span>'+escHtml(t.label)+' · question '+step+'</span><span class="iq-bar"><i style="width:'+Math.min(100,Math.round(step/total*100))+'%"></i></span><button type="button" class="btn sm outline" onclick="iqStop()">Stop here</button></div>';
+  if(n.who==='counter')h+='<span class="iq-who">'+(n.info?'Do this':'Check it yourself')+'</span>';
+  h+='<div class="iq-q">'+escHtml(n.q)+'</div>';
+  if(n.info){h+='<div class="iq-more"><button type="button" class="btn primary" onclick="iqAnswer({pick:[]})">Done</button></div>';}
+  else if(n.text){h+='<div class="iq-more"><input type="text" id="iq-text" placeholder="Type it here" value="'+escHtml(pre&&pre.text||'')+'"><button type="button" class="btn primary" onclick="iqTextNext()">Next</button></div>';}
+  else{
+    h+='<div class="iq-opts">'+opts.map(function(o,i){var on=n.multi?IQ.multi.indexOf(o.l)>=0:false;return '<button type="button" class="iq-opt'+(on?' on':'')+'" onclick="iqPick('+i+')">'+escHtml(o.l)+web(o)+'</button>';}).join('')+'</div>';
+    if(n.multi)h+='<div class="iq-more"><button type="button" class="btn primary" onclick="iqMultiNext()">Next</button></div>';
+  }
+  if(!n.info)h+='<div class="iq-more"><button type="button" class="btn sm outline" onclick="iqAnswer({unsure:true})">Not sure</button>'+(n.text?'':'<input type="text" id="iq-else" placeholder="Something else? Type it">'+'<button type="button" class="btn sm outline" onclick="iqElse()">Use this</button>')+'</div>';
+  if(IQ.log.length)h+='<div class="iq-more"><button type="button" class="btn sm" onclick="iqBack()">&larr; Back</button></div>';
+  p.innerHTML=h;
+  var ti=document.getElementById('iq-text');if(ti){ti.focus();ti.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();iqTextNext();}};}
+}
+function iqPick(i){
+  var n=iqTree().nodes[IQ.cur],o=INTAKE.optsFor(n,IQ.type)[i];if(!o)return;
+  if(n.multi){var k=IQ.multi.indexOf(o.l);if(k<0)IQ.multi.push(o.l);else IQ.multi.splice(k,1);
+    [].forEach.call(document.querySelectorAll('#iq-panel .iq-opt'),function(b,j){var oj=INTAKE.optsFor(n,IQ.type)[j];b.classList.toggle('on',IQ.multi.indexOf(oj.l)>=0);});return;}
+  iqAnswer({pick:[o.l]});
+}
+function iqMultiNext(){var ex=((document.getElementById('iq-else')||{}).value||'').trim();iqAnswer(IQ.multi.length||ex?{pick:IQ.multi.slice(),text:ex}:{unsure:true});}
+function iqTextNext(){var v=(document.getElementById('iq-text').value||'').trim();iqAnswer(v?{pick:[],text:v}:{unsure:true});}
+function iqElse(){var v=((document.getElementById('iq-else')||{}).value||'').trim();if(!v){document.getElementById('iq-else').focus();return;}
+  var n=iqTree().nodes[IQ.cur];iqAnswer({pick:n.multi?IQ.multi.slice():[],text:v,other:true});}
+function iqAnswer(a){
+  var t=iqTree(),n=t.nodes[IQ.cur],pre=iqPre(IQ.cur);
+  a.id=IQ.cur;
+  if(pre&&!IQ.prefill.fromJob&&!a.unsure&&JSON.stringify((pre.pick||[]).slice().sort())===JSON.stringify((a.pick||[]).slice().sort())&&!a.text)a.online=true;
+  IQ.log.push(a);
+  var nx=a.other&&!n.multi?(n.next||'END'):INTAKE.nextId(n,a);
+  IQ.cur=INTAKE.firstShown(t,nx,false);iqDraw();
+}
+function iqBack(){var last=IQ.log.pop();if(last){IQ.cur=last.id;}iqDraw();}
+function iqStop(){IQ.cur='END';iqDraw();}
+function iqFinish(){
+  var p=document.getElementById('iq-panel'),r=INTAKE.summarize(IQ.type,IQ.log);
+  IQ.pending=r;
+  var h='<div class="iq-top"><span>Here’s what the tech will see</span></div><div class="iq-sum">'+escHtml(r.sentence||'No answers yet.')+'</div>';
+  if(r.checks.length)h+='<div class="iq-checks">'+r.checks.map(function(c){return '<span class="iq-chk'+(c.warn?' warn':'')+'">'+(c.warn?'&#9888; ':'&#10003; ')+escHtml(c.label)+': '+escHtml(c.value)+'</span>';}).join('')+'</div>';
+  h+='<div class="iq-more"><button type="button" class="btn primary" onclick="iqUse()">Put it on the work order</button><button type="button" class="btn sm" onclick="iqBack()">&larr; Back</button><button type="button" class="btn sm outline" onclick="iqCancel()">Throw these answers out</button></div>';
+  p.innerHTML=h;
+}
+function iqUse(){
+  var r=IQ.pending;if(!r)return;
+  var ta=document.getElementById('m-complaint'),old=(ta.value||'').trim(),prev=IQ.result&&IQ.result.sentence;
+  if(prev&&old.indexOf(prev)===0)old=old.slice(prev.length).trim();
+  var webS=IQ.prefill&&IQ.prefill.sentence;if(webS&&old.indexOf(webS)===0)old=old.slice(webS.length).trim();
+  ta.value=r.sentence+(old?'\n'+(/^Customer said/.test(old)?'':'Customer said: ')+old:'');
+  if(r.quick)document.getElementById('m-quick').checked=true;
+  IQ.result={tree:r.tree,sentence:r.sentence,checks:r.checks,answers:r.answers,quick:r.quick,log:IQ.log,by:(typeof myDisplayName==='function'?myDisplayName():''),at:Date.now()};
+  document.getElementById('iq-panel').style.display='none';
+  document.getElementById('iq-note').innerHTML='<b>&#10003; '+r.answers.length+' answers added.</b> Saved with the job when you save.';
+}
+function iqCancel(){IQ.pending=null;IQ.log=[];document.getElementById('iq-panel').style.display='none';}
+function iqDetailHtml(o){
+  var q=o.intake;if(!q||!q.answers)return '';
+  var chk=(q.checks||[]).map(function(c){return '<span class="iq-chk'+(c.warn?' warn':'')+'">'+(c.warn?'&#9888; ':'&#10003; ')+escHtml(c.label)+': '+escHtml(c.value)+'</span>';}).join('');
+  var ans=(q.answers||[]).map(function(a){return '<span>'+escHtml(a.q)+(a.by==='customer'?' <i style="color:#1a5c0a;font-style:normal">(online)</i>':'')+'</span><span>'+escHtml(a.a)+'</span>';}).join('');
+  return '<div style="margin-bottom:10px">'+(chk?'<div class="df-lbl">Counter checks</div><div class="iq-checks">'+chk+'</div>':'')
+    +'<details><summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--gray2)">Intake answers ('+(q.answers||[]).length+')'+(q.by?' · '+escHtml(q.by):'')+'</summary><div class="iq-ans">'+ans+'</div></details></div>';
+}
+
 function openDet(id){
   var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId]||{};
   var prows=(o.parts||[]).map(function(p,pi){return '<tr><td style="padding:5px 8px;border-bottom:1px solid var(--off);font-family:monospace;font-size:11px;color:var(--gray2)">'+escHtml(p.pn||'')+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off)">'+escHtml(p.desc)+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);text-align:center">'+p.qty+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--off);color:var(--gray2)">'+escHtml(p.note||'')+'</td><td style="padding:3px 4px;border-bottom:1px solid var(--off)"><button onclick="deletePart(\''+id+'\','+pi+')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px;padding:2px 5px;font-weight:700">&#x2715;</button></td></tr>';}).join('');
   var stats=STATUS_LIST;
   var sbtns=stats.map(function(s){var isW=s==='Waiting on Parts';return '<button class="sbtn'+(isW?' waiting-btn':'')+(o.status===s?' active':'')+'" onclick="quickStatus(\''+id+'\',\''+s+'\')">'+s+'</button>';}).join('');
-  var eqf=[['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];});
+  var eqf=[['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial||(o.noSerial?'No plate / unreadable':'')],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];});
   var atts=ATTACHMENTS[id]||[];
-  var attHtml=atts.map(function(a,i){var src=a.url||a.data||'';return '<div class="attach-thumb"><img src="'+src+'" onclick="viewImg(\''+id+'\','+i+')" title="'+escHtml(a.name)+'"><button class="rm-att" onclick="removeAtt(\''+id+'\','+i+')">&#x2715;</button></div>';}).join('');
+  var attHtml=atts.map(function(a,i){return attThumbHtml(id,a,i);}).join('');
   var logs=CONTACTLOGS[id]||[];
   var logHtml=logs.length?logs.map(function(l,i){return '<div class="contact-log-entry"><div style="font-weight:600">'+l.type+'</div><div>'+escHtml(l.note)+'</div><div class="cl-meta">'+escHtml(l.dt)+'<button class="btn sm del" onclick="deleteContactLog(\''+id+'\','+i+')" style="margin-left:8px;padding:1px 6px;font-size:10px">remove</button></div></div>';}).join(''):'<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No contact logged yet.</div>';
   var wStatus=o.status==='Waiting on Parts'&&o.partsWaiting?'<div style="background:#FAEEDA;border:1.5px solid #EF9F27;border-radius:3px;padding:8px 12px;font-size:12px;color:#633806;margin-bottom:10px"><strong>Waiting on:</strong> '+escHtml(o.partsWaiting)+'</div>':'';
@@ -2773,6 +2935,7 @@ function openDet(id){
     +'<div class="sect-lbl">Equipment</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 14px;margin-bottom:12px">'+eqf.map(function(f){return '<div><div class="df-lbl">'+f[0]+'</div><div class="df-val">'+escHtml(f[1])+'</div></div>';}).join('')+'</div>'
     +lookupHtml
     +(o.complaint?'<div style="margin-bottom:8px"><div class="df-lbl">Customer Complaint</div><div class="df-val">'+escHtml(o.complaint)+'</div></div>':'')
+    +iqDetailHtml(o)
     +'<div class="sect-lbl">Notes</div>'
     +(o.notes?'<div style="margin-bottom:8px"><div class="df-val" style="white-space:pre-wrap">'+escHtml(o.notes)+'</div>'+(o.notesTs?'<div class="note-ts">Updated: '+o.notesTs+'</div>':'')+'</div>':'')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;padding:8px;background:var(--off);border-radius:3px;border:1.5px solid var(--silver);margin-bottom:8px">'
@@ -2795,64 +2958,82 @@ function openDet(id){
     +'<button class="btn sm outline" onclick="openContactLog(\''+id+'\')" style="margin-top:8px">+ Log Contact</button>'
     +'<div id="sig-section-'+id+'">'+sigSectionHtml(id)+'</div>'
     +'<div class="sect-lbl">Attachments</div><div id="att-thumbs-'+id+'" style="margin-bottom:6px">'+attHtml+'</div>'
-    +'<div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">Tap to attach photo or scan a signed copy</div>'
-    +'<input type="file" id="att-file-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
+    +'<div class="att-btns"><div class="upload-zone" onclick="document.getElementById(\'att-cam-'+id+'\').click()">&#128247; Take photo</div><div class="upload-zone" onclick="document.getElementById(\'att-file-'+id+'\').click()">&#128206; Choose photos or files</div></div>'
+    +'<input type="file" id="att-cam-'+id+'" accept="image/*" capture="environment" style="display:none" onchange="handleAttach(\''+id+'\',this)">'
+    +'<input type="file" id="att-file-'+id+'" accept="image/*,application/pdf" multiple style="display:none" onchange="handleAttach(\''+id+'\',this)">'
     +'<div style="padding:8px 0 4px;font-size:15px;display:flex;gap:8px;flex-wrap:wrap">'+(o.paid?'<span class="b-paid">Paid in Full</span>':o.deposit?'<span class="b-deposit">Deposit Taken</span>':'<span style="color:var(--muted)">No payment recorded</span>')+'</div>'+'<div class="mfoot"><button class="btn" onclick="closeM(\'det-modal\')">Close</button><button class="btn" onclick="openEditWO(\''+id+'\')">Edit</button>'+(c.phone?'<button class="btn success" style="padding:6px 12px" onclick="textCustomer(\''+id+'\')">📱 Text Customer</button>':'')+'<button class="btn success" onclick="printWO(\''+id+'\')">Print Work Order</button><button class="btn" onclick="downloadInvoice(\''+id+'\')">&#x2B07; Download Invoice</button></div>';
   document.getElementById('det-modal').classList.add('open');
   loadSignatures(id,function(){var el=document.getElementById('sig-section-'+id);if(el)el.innerHTML=sigSectionHtml(id);});
 }
 
-function handleAttach(woid,inp){
-  if(!inp.files||!inp.files[0])return;
-  var file=inp.files[0];
-  var tb=document.getElementById('att-thumbs-'+woid);
-  var loadDiv=document.createElement('div');
-  loadDiv.id='att-loading-'+woid;
-  loadDiv.style.cssText='font-size:12px;color:var(--muted);padding:6px 0;font-style:italic';
-  loadDiv.textContent='Uploading photo...';
-  if(tb)tb.appendChild(loadDiv);
+// ── Attachments: photos and PDFs on a work order. Several at once, at intake or any stage.
+// Each one records who added it and the job's stage at that moment. Stored at attachments/<woid> as before
+// (same list shape), so the website's used-unit photo picker keeps working; it only offers pictures.
+function attIsPdf(a){return a&&(a.type==='pdf'||/\.pdf(\?|$)/i.test(a.path||a.name||''));}
+function attThumbHtml(woid,a,i){
+  var src=a.url||a.data||'',cap='<div class="att-cap"><b>'+escHtml(a.stage||'')+'</b>'+escHtml([a.by,a.ts].filter(Boolean).join(' \u00b7 '))+'</div>';
+  var face=attIsPdf(a)?'<div class="att-pdf" onclick="viewImg(\''+woid+'\','+i+')" title="'+escHtml(a.name)+'">PDF<small>'+escHtml(a.name||'')+'</small></div>'
+    :'<img src="'+src+'" onclick="viewImg(\''+woid+'\','+i+')" title="'+escHtml(a.name)+'">';
+  return '<div class="attach-thumb">'+face+'<button class="rm-att" onclick="removeAtt(\''+woid+'\','+i+')">&#x2715;</button>'+cap+'</div>';
+}
+function attShrink(file,cb){   // photos shrink to 1200px JPEG, same as before
   var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var MAX=1200,canvas=document.createElement('canvas');
-      var w=img.width,h=img.height;
-      if(w>MAX||h>MAX){if(w>h){h=Math.round(h*(MAX/w));w=MAX;}else{w=Math.round(w*(MAX/h));h=MAX;}}
-      canvas.width=w;canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      canvas.toBlob(function(blob){
-        var ts=Date.now();
-        var path='attachments/'+woid+'/'+ts+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-        function addThumb(src){
-          var ld=document.getElementById('att-loading-'+woid);if(ld)ld.remove();
-          if(tb){
-            var i=(ATTACHMENTS[woid]||[]).length-1;
-            var div=document.createElement('div');div.className='attach-thumb';
-            var img2=document.createElement('img');img2.src=src;img2.title=file.name;
-            img2.onclick=function(){viewImg(woid,i);};
-            var btn=document.createElement('button');btn.className='rm-att';btn.innerHTML='&#x2715;';
-            btn.onclick=function(){removeAtt(woid,i);};
-            div.appendChild(img2);div.appendChild(btn);tb.appendChild(div);
-          }
-        }
-        if(STORAGE){
-          var ref=STORAGE.ref(path);
-          ref.put(blob).then(function(){return ref.getDownloadURL();}).then(function(url){
-            var atts=ATTACHMENTS[woid]?JSON.parse(JSON.stringify(ATTACHMENTS[woid])):[];
-            atts.push({name:file.name,url:url,path:path,ts:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})});
-            writeAttachments(woid,atts);addThumb(url);
-          }).catch(function(err){var ld=document.getElementById('att-loading-'+woid);if(ld)ld.textContent='Upload failed: '+err.message;});
-        } else {
-          var dataUrl=canvas.toDataURL('image/jpeg',0.75);
-          var atts=ATTACHMENTS[woid]?JSON.parse(JSON.stringify(ATTACHMENTS[woid])):[];
-          atts.push({name:file.name,data:dataUrl,ts:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})});
-          writeAttachments(woid,atts);addThumb(dataUrl);
-        }
-      },'image/jpeg',0.75);
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);inp.value='';
+  reader.onload=function(e){var img=new Image();img.onload=function(){
+    var MAX=1200,w=img.width,h=img.height;if(w>MAX||h>MAX){if(w>h){h=Math.round(h*(MAX/w));w=MAX;}else{w=Math.round(w*(MAX/h));h=MAX;}}
+    var cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
+    cv.toBlob(function(blob){cb(blob,cv);},'image/jpeg',0.75);
+  };img.onerror=function(){cb(null);};img.src=e.target.result;};
+  reader.onerror=function(){cb(null);};reader.readAsDataURL(file);
+}
+function attAppend(woid,rec){   // add to the list without overwriting someone else's upload
+  if(DB){DB.ref('attachments/'+woid).transaction(function(cur){var arr=Array.isArray(cur)?cur:(cur?Object.keys(cur).map(function(k){return cur[k];}):[]);arr.push(rec);return arr;});}
+  else{(ATTACHMENTS[woid]=ATTACHMENTS[woid]||[]).push(rec);saveLocal();}
+}
+function uploadAtts(woid,files,stage,onEach,onDone){
+  files=[].slice.call(files||[]);var left=files.length,failed=[];
+  if(!left){if(onDone)onDone(failed);return;}
+  var by=(typeof myDisplayName==='function'?myDisplayName():'')||'',day=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  function finish(name,ok){if(!ok)failed.push(name);if(onEach)onEach();if(--left===0&&onDone)onDone(failed);}
+  files.forEach(function(file,n){
+    var pdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+    if(!pdf&&!/^image\//.test(file.type)){finish(file.name,false);return;}
+    var base={name:file.name,ts:day,at:Date.now(),by:by,stage:stage||'',type:pdf?'pdf':'image'};
+    var path='attachments/'+woid+'/'+Date.now()+'_'+n+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    function put(blob,meta){
+      if(STORAGE){var ref=STORAGE.ref(path);ref.put(blob,meta).then(function(){return ref.getDownloadURL();}).then(function(url){attAppend(woid,Object.assign({url:url,path:path},base));finish(file.name,true);}).catch(function(err){console.warn('Upload failed',file.name,err);finish(file.name,false);});}
+      else if(pdf){finish(file.name,false);}   // offline mode can't hold PDFs
+      else{attShrink(file,function(b,cv){if(!cv){finish(file.name,false);return;}attAppend(woid,Object.assign({data:cv.toDataURL('image/jpeg',0.75)},base));finish(file.name,true);});}
+    }
+    if(pdf)put(file,{contentType:'application/pdf'});
+    else if(STORAGE)attShrink(file,function(blob){if(!blob){finish(file.name,false);return;}put(blob,{contentType:'image/jpeg'});});
+    else put(null);
+  });
+}
+function handleAttach(woid,inp){
+  if(!inp.files||!inp.files.length)return;
+  var files=[].slice.call(inp.files);inp.value='';
+  var o=ORDERS[woid]||{},tb=document.getElementById('att-thumbs-'+woid),n=files.length,done=0;
+  var ld=document.createElement('div');ld.className='att-busy';ld.id='att-loading-'+woid;
+  var upd=function(){ld.textContent='Uploading '+(n>1?(done+1>n?n:done+1)+' of '+n+'\u2026':'\u2026');};upd();
+  if(tb)tb.appendChild(ld);
+  uploadAtts(woid,files,o.status||'',function(){done++;upd();},function(failed){
+    if(failed.length){ld.textContent='Didn\u2019t upload: '+failed.join(', ')+'. Only photos and PDFs work. If PDFs keep failing, the Firebase Storage rules may only allow images.';setTimeout(function(){if(document.getElementById('det-modal').classList.contains('open'))openDet(woid);},6000);}
+    else openDet(woid);
+  });
+}
+// Files picked on the New / Edit work order form wait here until Save gives the job its number.
+var FORM_ATTS=[];
+function clearFormAtts(){FORM_ATTS=[];renderFormAtts();}
+function queueFormAtts(inp){[].slice.call(inp.files||[]).forEach(function(f){FORM_ATTS.push({file:f,url:/^image\//.test(f.type)?URL.createObjectURL(f):''});});inp.value='';renderFormAtts();}
+function unqueueFormAtt(i){var x=FORM_ATTS.splice(i,1)[0];if(x&&x.url)URL.revokeObjectURL(x.url);renderFormAtts();}
+function renderFormAtts(){
+  var box=document.getElementById('m-att-thumbs');if(!box)return;
+  box.innerHTML=FORM_ATTS.map(function(x,i){return '<div class="attach-thumb">'+(x.url?'<img src="'+x.url+'" title="'+escHtml(x.file.name)+'">':'<div class="att-pdf" title="'+escHtml(x.file.name)+'">PDF<small>'+escHtml(x.file.name)+'</small></div>')+'<button class="rm-att" onclick="unqueueFormAtt('+i+')">&#x2715;</button><div class="att-cap">Uploads on save</div></div>';}).join('');
+}
+function flushFormAtts(woid,stage){
+  if(!FORM_ATTS.length)return;
+  var files=FORM_ATTS.map(function(x){return x.file;});FORM_ATTS.forEach(function(x){if(x.url)setTimeout(function(){URL.revokeObjectURL(x.url);},60000);});FORM_ATTS=[];renderFormAtts();
+  uploadAtts(woid,files,stage,null,function(failed){if(failed.length)alert('These didn\u2019t upload to the work order: '+failed.join(', ')+'\n\nOpen the job and try again. Only photos and PDFs work.');});
 }
 function removeAtt(woid,idx){
   dangerConfirm('Delete photo?','Permanently delete this photo from the work order?','Yes, delete it',function(){
@@ -2863,7 +3044,7 @@ function removeAtt(woid,idx){
   writeAttachments(woid,atts);openDet(woid);
   });
 }
-function viewImg(woid,idx){var a=ATTACHMENTS[woid];if(!a||!a[idx])return;var src=a[idx].url||a[idx].data||'';var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%;height:auto">');}
+function viewImg(woid,idx){var a=ATTACHMENTS[woid];if(!a||!a[idx])return;var src=a[idx].url||a[idx].data||'';if(attIsPdf(a[idx])&&a[idx].url){window.open(a[idx].url,'_blank');return;}var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%;height:auto">');}
 
 function openCustDet(id){
   var c=CUSTS[id];if(!c)return;var wos=orderArr().filter(function(o){return o.custId===id;}),eq=custEquip(id);
@@ -2932,7 +3113,7 @@ function printWO(id){
     +'<div>'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:5px">Equipment</div>'
     +(equipLine?'<div style="font-size:18px;font-weight:700;margin-bottom:5px">'+escHtml(equipLine)+'</div>':'')
-    +([['Year',o.year],['Model',o.model],['Serial #',o.serial],['Engine',o.engine]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:12px;color:#444;margin-bottom:2px"><strong>'+f[0]+':</strong> '+escHtml(f[1])+'</div>';}).join(''))
+    +([['Year',o.year],['Model',o.model],['Serial #',o.serial||(o.noSerial?'No plate / unreadable':'')],['Engine',o.engine]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:12px;color:#444;margin-bottom:2px"><strong>'+f[0]+':</strong> '+escHtml(f[1])+'</div>';}).join(''))
     +'</div>'
     +'</div>'
     +'<div style="display:flex;border:1.5px solid #1a1a1a;margin-bottom:14px">'
@@ -2989,7 +3170,7 @@ function printWO(id){
     +'</div>'
     +'<div style="border:1px solid #888;padding:6px">'
     +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">Equipment</div>'
-    +([['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:11px;margin-bottom:1px"><strong>'+f[0]+':</strong> '+escHtml(f[1])+'</div>';}).join(''))
+    +([['Type',o.equipType],['Brand',o.brand],['Year',o.year],['Product #',o.product],['Model',o.model],['Serial #',o.serial||(o.noSerial?'No plate / unreadable':'')],['Engine',o.engine],['Hrs / Condition',o.hours]].filter(function(f){return f[1];}).map(function(f){return '<div style="font-size:11px;margin-bottom:1px"><strong>'+f[0]+':</strong> '+escHtml(f[1])+'</div>';}).join(''))
     +'<div style="font-size:11px;margin-top:2px"><strong>Tech:</strong> '+escHtml(o.tech||'________________')+'</div>'
     +'</div>'
     +'</div>'
