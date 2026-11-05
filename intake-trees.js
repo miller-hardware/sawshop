@@ -239,6 +239,38 @@
     photo: photo("serial plate, hour meter and any damage")
   } };
 
+  // Pole saw: a small saw on a shaft. Chain, bar and oiler like a chainsaw, plus the shaft, drive and extension.
+  T.polesaw = { label: "Pole saw", start: "reason", nodes: {
+    reason: { q: "What brought it in today?", cq: "What do you need done?", next: "power", opts: [
+      { l: "Sharpen chain only", s: "Chain sharpening only", quick: true, n: "END" },
+      { l: "Tune-up or service, no problem", s: "In for a tune-up, no problem reported", n: "left" },
+      { l: "Something's wrong", s: "", n: "style" }] },
+    style: { q: "One-piece or a pole saw attachment on a powerhead (Kombi, multi-tool)?", next: "power", opts: [
+      { l: "One-piece pole saw", s: "One-piece pole saw" }, { l: "Attachment on a powerhead", s: "Pole saw attachment on a powerhead" }] },
+    power: { q: "Gas or battery?", next: "starts", opts: [{ l: "Gas", s: "", n: "starts" }, { l: "Battery", s: "Battery pole saw", n: "bat_what" }] },
+    starts: { q: "Does it start?", next: "rope", opts: [{ l: "Yes", s: "Starts", n: "keeps" }, { l: "No", s: "Won't start", n: "rope" }] },
+    rope: ropeCheck("lastran", "howlong"),
+    lastran: lastRan("fuelage"), fuelage: fuelAge("fueltype"), fueltype: fuelType("howlong"),
+    keeps: { q: "Does it keep running?", next: "use", opts: [
+      { l: "Runs fine until I use it", s: "Runs until put to work", n: "use" },
+      { l: "Quits on its own", s: "Quits on its own", n: "use" }] },
+    use: { q: "What happens when it's used? Pick all that apply.", cq: "What happens when you use it? Pick all that apply.", multi: true, say: "When used: ", next: "howlong", opts: [
+      { l: "Bogs or loses power cutting", s: "bogs or loses power cutting" }, { l: "Chain spins at idle", s: "chain spins at idle", warn: true },
+      { l: "Chain won't spin, engine runs", s: "chain won't spin while engine runs" }, { l: "Cuts slow or crooked", s: "cuts slow or crooked" },
+      { l: "Bar or chain not getting oil", s: "bar or chain not getting oil" }, { l: "Chain throws off or goes loose", s: "chain throws off or goes loose" },
+      { l: "Shaft or extension loose or rattles", s: "shaft or extension loose or rattles" },
+      { l: "Shaft won't extend or lock", s: "shaft won't extend or lock" },
+      { l: "Gear head hot, noisy or leaking", s: "gear head hot, noisy or leaking", warn: true },
+      { l: "Smokes or leaks", s: "smokes or leaks" }] },
+    howlong: howLong("happened"),
+    happened: happened("left", ["Dropped", "Bar pinched in a cut", "Hit a wire or fence", "Ran out of bar oil", "Sat over winter", "Someone worked on it"]),
+    left: leftWith(["Bar", "Chain", "Scabbard", "Extension pieces", "Powerhead", "Harness", "Battery", "Charger"]),
+    photo: photo("serial plate and any damage"),
+    bat_what: batteryWhat("bat_lights", ["Chain won't spin", "Bar not oiling"]),
+    bat_lights: batteryLights("bat_other"), bat_other: batteryOther("charger"), charger: charger("bat_model"),
+    bat_model: batteryModel("bat_left"), bat_left: batteryLeft("use")
+  } };
+
   // Everything else: generators, pressure washers, tillers, splitters, augers, hedge trimmers, edgers, other.
   // "for" limits an answer to certain equipment types.
   T.general = { label: "Other equipment", start: "reason", nodes: {
@@ -280,7 +312,7 @@
   // Equipment type (as the app and website name it) -> tree
   var MAP = {
     "Chainsaw": "chainsaw", "Trimmer / Weedeater": "trimmer", "Blower": "blower",
-    "Mower — Push": "pushmower", "Mower — Riding": "riding", "Zero Turn Mower": "riding"
+    "Mower — Push": "pushmower", "Mower — Riding": "riding", "Zero Turn Mower": "riding", "Pole Saw": "polesaw"
   };
 
   // ---------- the engine both pages use ----------

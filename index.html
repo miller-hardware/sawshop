@@ -27,6 +27,24 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 .topbar-brand{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:800;color:#fff;letter-spacing:.02em}
 .topbar-brand span{color:var(--red)}
 .topbar-right{display:flex;align-items:center;gap:8px}
+.omni{position:relative;flex:1 1 320px;max-width:560px;min-width:0}
+.omni input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid #555;border-radius:18px;background:#2a2a2a;color:#fff;font-family:'Barlow',sans-serif;font-size:15px}
+.omni input::placeholder{color:#aaa}
+.omni input:focus{outline:none;border-color:var(--red);background:#fff;color:var(--dark)}
+.omni .omni-ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#aaa;font-size:15px;pointer-events:none}
+#omni-res{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:4500;background:var(--white);border:1.5px solid var(--silver);border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-height:70vh;overflow-y:auto;display:none}
+.omni-grp{padding:6px 0;border-top:1px solid var(--off)}
+.omni-grp:first-child{border-top:0}
+.omni-gh{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:4px 14px}
+.omni-it{display:block;width:100%;text-align:left;background:none;border:0;padding:7px 14px;cursor:pointer;font-family:'Barlow',sans-serif;color:var(--dark)}
+.omni-it:hover,.omni-it.sel{background:#fdeaea}
+.omni-t{font-size:15px;font-weight:600}
+.omni-s{font-size:12.5px;color:var(--gray2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.omni-it mark{background:#ffe08a;color:inherit;padding:0 1px;border-radius:2px}
+.omni-st{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;background:var(--off);color:var(--gray2);margin-left:6px;vertical-align:1px}
+.omni-more{font-size:13px;font-weight:700;color:var(--red);padding:4px 14px 6px;background:none;border:0;cursor:pointer;font-family:'Barlow',sans-serif}
+.omni-empty{padding:14px;color:var(--muted);font-size:14px}
+@media(max-width:540px){.omni{order:3;flex-basis:100%;max-width:none}}
 .tv-pill{background:var(--red);color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:3px}
 .sync-pill{font-size:12px;padding:3px 8px;border-radius:3px;display:flex;align-items:center;gap:5px}
 .sync-pill.ok{background:#2d5a1b;color:#b8e68a}
@@ -350,6 +368,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
 <div class="app">
   <div class="topbar">
     <div class="topbar-brand">MILLER <span>HARDWARE</span> <span style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:.06em">SAW SHOP</span></div>
+    <div class="omni" id="omni"><span class="omni-ico">&#128269;</span><input type="search" id="omni-q" placeholder="Search everything: name, phone, WO#, serial, part #..." autocomplete="off" aria-label="Search everything" oninput="omniSearch()" onfocus="omniSearch()" onkeydown="omniKey(event)"><div id="omni-res" role="listbox"></div></div>
     <div class="topbar-right">
       <button onclick="openGuide()" title="Staff Guide" style="background:none;border:1px solid #666;color:#eee;font-family:'Barlow',sans-serif;font-size:12px;font-weight:600;padding:4px 11px;border-radius:14px;cursor:pointer">&#128214; Guide</button>
       <div id="sync-pill" class="sync-pill warn"><div class="dot a"></div><span id="sync-txt">Checking...</span></div>
@@ -383,7 +402,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
         <option value="">All Equipment</option>
         <option>Chainsaw</option><option>Trimmer / Weedeater</option><option>Mower — Push</option>
         <option>Mower — Riding</option><option>Zero Turn Mower</option><option>Blower</option>
-        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option>
+        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option><option>Pole Saw</option>
         <option>Tiller / Cultivator</option><option>Edger</option><option>Log Splitter</option>
         <option>Auger</option><option>Other</option>
       </select>
@@ -686,7 +705,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <select id="m-etype">
         <option>Chainsaw</option><option>Trimmer / Weedeater</option><option>Mower — Push</option>
         <option>Mower — Riding</option><option>Zero Turn Mower</option><option>Blower</option>
-        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option>
+        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option><option>Pole Saw</option>
         <option>Tiller / Cultivator</option><option>Edger</option><option>Log Splitter</option>
         <option>Auger</option><option>Other</option>
       </select>
@@ -798,7 +817,7 @@ hr{border:none;border-top:1.5px solid var(--silver);margin:12px 0}
       <select id="eq-type">
         <option>Chainsaw</option><option>Trimmer / Weedeater</option><option>Mower — Push</option>
         <option>Mower — Riding</option><option>Zero Turn Mower</option><option>Blower</option>
-        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option>
+        <option>Generator</option><option>Pressure Washer</option><option>Hedge Trimmer</option><option>Pole Saw</option>
         <option>Tiller / Cultivator</option><option>Edger</option><option>Log Splitter</option>
         <option>Auger</option><option>Other</option>
       </select>
@@ -1883,6 +1902,114 @@ function renderTab(t){
   else if(t==='rental')renderRentalFleet();
   // Settings is not auto-redrawn: it would wipe checkboxes someone is in the middle of ticking.
 }
+// ── Search everything (like Rundoo's omni search). Type anything: name, phone, WO#, hang tag, POS ticket, brand,
+// model, serial, part number, complaint or notes words. Every word must match somewhere. Exact numbers rank first.
+// Press / anywhere to jump to the box; arrows and Enter pick a result; Esc closes.
+var OMNI={t:null,items:[],sel:-1,more:{}};
+function omniNorm(x){return String(x==null?'':x).toLowerCase();}
+function omniDigits(x){return String(x==null?'':x).replace(/\D/g,'');}
+function omniCompact(x){return omniNorm(x).replace(/[^a-z0-9]/g,'');}
+function omniCustName(c){return c?((c.first||'')+' '+(c.last||'')).trim()||c.name||'':'';}
+function omniHl(text,words){
+  var t=escHtml(text||'');
+  words.forEach(function(w){if(w.length<1)return;var re=new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig');t=t.replace(re,'<mark>$1</mark>');});
+  return t;
+}
+// fields: [[label,value,exactBoost]]; returns a score or 0
+function omniScore(fields,words,q){
+  // each field is checked on its own, so numbers from two different fields never run together
+  var F=fields.map(function(f){var n=omniNorm(f[1]);return {n:n,c:omniCompact(n),d:omniDigits(n)};}),hay=F.map(function(x){return x.n;}).join(' \u00b7 '),score=0;
+  for(var i=0;i<words.length;i++){
+    var w=words[i],wc=omniCompact(w),wd=omniDigits(w),numOnly=wd.length>=4&&wd===w.replace(/[\s().-]/g,'');
+    var hit=hay.indexOf(w)>=0||F.some(function(x){return (wc&&x.c.indexOf(wc)>=0)||(numOnly&&x.d.indexOf(wd)>=0);});
+    if(!hit)return 0;
+    score+=1;
+    if(new RegExp('(^|[^a-z0-9])'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).test(hay))score+=1;   // starts a word
+  }
+  var qc=omniCompact(q);
+  fields.forEach(function(f){if(f[2]&&qc&&omniCompact(f[1])===qc)score+=20;});   // exact WO#, tag, serial, part #...
+  return score;
+}
+function omniSnippet(fields,words){   // the first field (after the title ones) that matched, so you see WHY it matched
+  for(var i=0;i<fields.length;i++){var v=String(fields[i][1]||'');if(!v||!fields[i][0])continue;var lv=omniNorm(v),cv=omniCompact(v);
+    if(words.some(function(w){return lv.indexOf(w)>=0||(omniCompact(w)&&cv.indexOf(omniCompact(w))>=0);})){
+      var at=Math.max(0,lv.indexOf(words[0])-30);return fields[i][0]+': '+(at?'\u2026':'')+v.slice(at,at+110);}}
+  return '';
+}
+function omniBuild(q){
+  var words=omniNorm(q).trim().split(/\s+/).filter(Boolean),G={wo:[],cust:[],eq:[],part:[],web:[],rent:[]};
+  if(!words.length)return {words:words,G:G};
+  // Work orders
+  Object.keys(ORDERS).forEach(function(id){var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId];
+    var f=[['WO',o.woNum,1],['Tag',o.tag,1],['POS ticket',o.ticket,1],['',omniCustName(c)],['Phone',c&&c.phone],['',o.equipType],['Brand',o.brand],['Model',o.model,1],['Serial',o.serial,1],['Product #',o.product,1],
+      ['Complaint',o.complaint],['Notes',o.notes],['Tech',o.tech],['Status',o.status],['Parts',(o.parts||[]).map(function(x){return [x.pn,x.desc,x.note].filter(Boolean).join(' ');}).join('; ')]];
+    var sc=omniScore(f,words,q);if(!sc)return;if(o.status!=='Picked Up')sc+=2;
+    G.wo.push({sc:sc,at:o.statusTs||0,t:'WO #'+(o.woNum||'?')+' \u00b7 '+(omniCustName(c)||'No customer'),st:o.status||'',
+      s:[o.brand,o.model,o.equipType].filter(Boolean).join(' ')+(o.serial?' \u00b7 SN '+o.serial:''),why:omniSnippet([f[1],f[2],f[4],f[9],f[10],f[11],f[12],f[14]],words),go:function(){openDet(id);}});});
+  // Customers
+  Object.keys(CUSTS).forEach(function(id){var c=CUSTS[id];if(!c)return;
+    var f=[['',omniCustName(c)],['Phone',c.phone,1],['Email',c.email],['Address',c.addr],['Notes',c.notes]];
+    var sc=omniScore(f,words,q);if(!sc)return;
+    var n=Object.keys(ORDERS).filter(function(k){return ORDERS[k].custId===id;}).length;
+    G.cust.push({sc:sc,at:0,t:omniCustName(c)||'(no name)',st:n?n+' job'+(n>1?'s':''):'',s:[c.phone,c.addr].filter(Boolean).join(' \u00b7 '),why:omniSnippet(f.slice(2),words),go:function(){openCustDet(id);}});});
+  // Equipment on file (saved under each customer)
+  Object.keys(EQUIPMENT).forEach(function(cid){(EQUIPMENT[cid]||[]).forEach(function(e){if(!e)return;var c=CUSTS[cid];
+    var f=[['',e.equipType||e.type],['Brand',e.brand],['Model',e.model,1],['Serial',e.serial,1],['Product #',e.product,1],['Owner',omniCustName(c)],['Notes',e.notes]];
+    var sc=omniScore(f,words,q);if(!sc)return;
+    G.eq.push({sc:sc,at:0,t:[e.brand,e.model].filter(Boolean).join(' ')||e.equipType||'Equipment',st:e.equipType||e.type||'',s:(omniCustName(c)||'')+(e.serial?' \u00b7 SN '+e.serial:''),why:'',go:function(){openCustDet(cid);}});});});
+  // Parts on order / previously ordered
+  ['stihl','other'].forEach(function(cat){(PARTORDERS[cat]||[]).forEach(function(p){if(!p)return;
+    var f=[['Part #',p.pn,1],['',p.desc],['For',p.equip],['WO',p.woNum,1],['Vendor',p.vendor],['Notes',p.notes]];
+    var sc=omniScore(f,words,q);if(!sc)return;var stt=p.received?'Received':p.ordered?'Ordered':'To order';if(!p.received)sc+=1;
+    G.part.push({sc:sc,at:0,t:(p.pn?p.pn+' \u00b7 ':'')+(p.desc||'Part'),st:stt,s:[p.qty?'Qty '+p.qty:'',p.vendor,p.woNum?'WO #'+p.woNum:'',p.equip].filter(Boolean).join(' \u00b7 '),why:'',
+      go:function(){if(p.woId&&ORDERS[p.woId]){openDet(p.woId);return;}showTab('parts');var pq=document.getElementById('po-q');if(pq){pq.value=p.pn||p.desc||'';if(typeof renderPartSearch==='function')renderPartSearch();}}});});});
+  // Web requests
+  Object.keys(WEBREQS).forEach(function(id){var r=WEBREQS[id];if(!r)return;
+    var f=[['',r.name],['Phone',r.phone,1],['Email',r.email],['',r.equipType],['Brand',r.brand],['Model',r.model],['Message',window.INTAKE?INTAKE.strip(r.problem):r.problem]];
+    var sc=omniScore(f,words,q);if(!sc)return;if(r.status!=='converted'&&r.status!=='closed')sc+=1;
+    G.web.push({sc:sc,at:r.createdAt||0,t:(r.name||'Web request')+(r.equipType?' \u00b7 '+r.equipType:''),st:r.status||'new',s:[r.phone,r.store].filter(Boolean).join(' \u00b7 '),why:omniSnippet(f.slice(6),words),go:function(){showTab('webreq');}});});
+  // Rental units
+  Object.keys(RENTAL_UNITS).forEach(function(id){var u=RENTAL_UNITS[id];if(!u)return;
+    var f=[['',u.type],['Brand',u.brand],['Model',u.model,1],['Serial',u.serial,1],['SKU',u.sku,1],['Notes',u.notes]];
+    var sc=omniScore(f,words,q);if(!sc)return;
+    G.rent.push({sc:sc,at:0,t:[u.brand,u.model].filter(Boolean).join(' ')||u.type||'Rental unit',st:u.status||'',s:[u.type,u.location,u.serial?'SN '+u.serial:''].filter(Boolean).join(' \u00b7 '),why:'',go:function(){showTab('rental');}});});
+  Object.keys(G).forEach(function(k){G[k].sort(function(a,b){return b.sc-a.sc||b.at-a.at;});});
+  return {words:words,G:G};
+}
+function omniSearch(){clearTimeout(OMNI.t);OMNI.t=setTimeout(omniRender,90);}
+function omniRender(){
+  var q=document.getElementById('omni-q').value,box=document.getElementById('omni-res');
+  if(!q.trim()){box.style.display='none';box.innerHTML='';OMNI.items=[];return;}
+  var r=omniBuild(q),G=r.G,names={wo:'Work orders',cust:'Customers',eq:'Equipment on file',part:'Parts',web:'Web requests',rent:'Rental units'};
+  OMNI.items=[];var h='',any=false;
+  ['wo','cust','eq','part','web','rent'].forEach(function(k){var L=G[k];if(!L.length)return;any=true;
+    var lim=OMNI.more[k]?40:(k==='wo'?6:4);
+    h+='<div class="omni-grp"><div class="omni-gh">'+names[k]+' \u00b7 '+L.length+'</div>';
+    L.slice(0,lim).forEach(function(it){var i=OMNI.items.length;OMNI.items.push(it);
+      h+='<button type="button" class="omni-it" data-i="'+i+'" onmousedown="event.preventDefault()" onclick="omniGo('+i+')"><div class="omni-t">'+omniHl(it.t,r.words)+(it.st?'<span class="omni-st">'+escHtml(it.st)+'</span>':'')+'</div>'
+        +(it.s?'<div class="omni-s">'+omniHl(it.s,r.words)+'</div>':'')+(it.why?'<div class="omni-s">'+omniHl(it.why,r.words)+'</div>':'')+'</button>';});
+    if(L.length>lim)h+='<button type="button" class="omni-more" onmousedown="event.preventDefault()" onclick="OMNI.more[\''+k+'\']=1;omniRender()">Show all '+L.length+'</button>';
+    h+='</div>';});
+  box.innerHTML=any?h:'<div class="omni-empty">Nothing matches \u201c'+escHtml(q)+'\u201d. Try part of a name, the last 4 of a phone, or a serial.</div>';
+  box.style.display='block';OMNI.sel=OMNI.items.length?0:-1;omniMark();
+}
+function omniMark(){[].forEach.call(document.querySelectorAll('#omni-res .omni-it'),function(b){b.classList.toggle('sel',+b.getAttribute('data-i')===OMNI.sel);});
+  var s=document.querySelector('#omni-res .omni-it.sel');if(s)s.scrollIntoView({block:'nearest'});}
+function omniGo(i){var it=OMNI.items[i];if(!it)return;omniClose();it.go();}
+function omniClose(){var b=document.getElementById('omni-res');b.style.display='none';OMNI.more={};document.getElementById('omni-q').blur();}
+function omniKey(e){
+  if(e.key==='ArrowDown'){e.preventDefault();if(OMNI.items.length){OMNI.sel=(OMNI.sel+1)%OMNI.items.length;omniMark();}}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(OMNI.items.length){OMNI.sel=(OMNI.sel-1+OMNI.items.length)%OMNI.items.length;omniMark();}}
+  else if(e.key==='Enter'){e.preventDefault();if(OMNI.sel>=0)omniGo(OMNI.sel);}
+  else if(e.key==='Escape'){e.target.value='';omniRender();omniClose();}
+}
+document.addEventListener('keydown',function(e){
+  if(e.key!=='/'||e.ctrlKey||e.metaKey||e.altKey)return;var t=e.target,tag=(t.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable)return;
+  e.preventDefault();var q=document.getElementById('omni-q');if(q){q.focus();q.select();}
+});
+document.addEventListener('mousedown',function(e){var o=document.getElementById('omni');if(o&&!o.contains(e.target)){var b=document.getElementById('omni-res');if(b)b.style.display='none';}});
+
 function refreshAll(){
   if(_redrawT)return;
   _redrawT=setTimeout(function(){
