@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="intake-trees.js"></script>
+<script src="guide-howto.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -27,6 +28,20 @@ body{font-family:'Barlow',sans-serif;font-size:16px;color:var(--dark);background
 .topbar-brand{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:800;color:#fff;letter-spacing:.02em}
 .topbar-brand span{color:var(--red)}
 .topbar-right{display:flex;align-items:center;gap:8px}
+.gq-wrap{position:sticky;top:0;z-index:2;background:var(--off);padding:4px 0 10px}
+.gq-wrap input{width:100%;padding:12px 14px 12px 40px;font-size:17px;border:2px solid var(--silver);border-radius:24px;font-family:'Barlow',sans-serif;background:#fff}
+.gq-wrap input:focus{outline:none;border-color:var(--red)}
+.gq-wrap .gq-ico{position:absolute;left:15px;top:17px;color:var(--muted)}
+.gq-group{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 2px 6px}
+.gq-item{background:#fff;border:1.5px solid var(--silver);border-radius:6px;margin-bottom:6px}
+.gq-item summary{cursor:pointer;padding:12px 14px;font-weight:700;font-size:15px;color:var(--dark);list-style-position:inside}
+.gq-item[open] summary{color:var(--red)}
+.gq-item.hit{border-color:var(--red)}
+.gq-item ol{margin:0;padding:0 18px 4px 38px;font-size:15px;line-height:1.55;color:var(--dark)}
+.gq-item ol li{margin-bottom:5px}
+.gq-tip{margin:4px 14px 12px;padding:8px 10px;background:#fff8e1;border-left:3px solid #e0a800;font-size:13.5px;line-height:1.45;color:#5a4500}
+.gq-none{padding:14px;color:var(--muted);font-size:15px}
+.gq-item mark{background:#ffe08a;color:inherit;padding:0 1px;border-radius:2px}
 .omni{position:relative;flex:1 1 320px;max-width:560px;min-width:0}
 .omni input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid #555;border-radius:18px;background:#2a2a2a;color:#fff;font-family:'Barlow',sans-serif;font-size:15px}
 .omni input::placeholder{color:#aaa}
@@ -1910,11 +1925,12 @@ function omniNorm(x){return String(x==null?'':x).toLowerCase();}
 function omniDigits(x){return String(x==null?'':x).replace(/\D/g,'');}
 function omniCompact(x){return omniNorm(x).replace(/[^a-z0-9]/g,'');}
 function omniCustName(c){return c?((c.first||'')+' '+(c.last||'')).trim()||c.name||'':'';}
-function omniHl(text,words){
-  var t=escHtml(text||'');
-  words.forEach(function(w){if(w.length<1)return;var re=new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig');t=t.replace(re,'<mark>$1</mark>');});
-  return t;
+function omniHl(text,words){   // one pass over the plain text, so a highlight can never land inside another one
+  var ws=(words||[]).filter(function(w){return w&&w.length>=2;}).map(function(w){return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}).sort(function(a,b){return b.length-a.length;});
+  if(!ws.length)return escHtml(text||'');
+  return String(text||'').split(new RegExp('('+ws.join('|')+')','ig')).map(function(part,k){return k%2?'<mark>'+escHtml(part)+'</mark>':escHtml(part);}).join('');
 }
+
 // fields: [[label,value,exactBoost]]; returns a score or 0
 function omniScore(fields,words,q){
   // each field is checked on its own, so numbers from two different fields never run together
@@ -1937,7 +1953,7 @@ function omniSnippet(fields,words){   // the first field (after the title ones) 
   return '';
 }
 function omniBuild(q){
-  var words=omniNorm(q).trim().split(/\s+/).filter(Boolean),G={wo:[],cust:[],eq:[],part:[],web:[],rent:[]};
+  var words=omniNorm(q).trim().split(/\s+/).filter(Boolean),G={wo:[],cust:[],eq:[],part:[],web:[],rent:[],how:[]};
   if(!words.length)return {words:words,G:G};
   // Work orders
   Object.keys(ORDERS).forEach(function(id){var o=ORDERS[id];if(!o)return;var c=CUSTS[o.custId];
@@ -1973,6 +1989,9 @@ function omniBuild(q){
     var f=[['',u.type],['Brand',u.brand],['Model',u.model,1],['Serial',u.serial,1],['SKU',u.sku,1],['Notes',u.notes]];
     var sc=omniScore(f,words,q);if(!sc)return;
     G.rent.push({sc:sc,at:0,t:[u.brand,u.model].filter(Boolean).join(' ')||u.type||'Rental unit',st:u.status||'',s:[u.type,u.location,u.serial?'SN '+u.serial:''].filter(Boolean).join(' \u00b7 '),why:'',go:function(){showTab('rental');}});});
+  // How-to answers from the Guide
+  G.how=guideMatches(q).slice(0,8).map(function(x){var h=GUIDE_HOWTO[x.i];
+    return {sc:x.sc,at:0,t:h.t,st:'How to',s:h.s[0],why:'',hw:guideWords(q),go:function(){openGuide(x.i,q);}};});
   Object.keys(G).forEach(function(k){G[k].sort(function(a,b){return b.sc-a.sc||b.at-a.at;});});
   return {words:words,G:G};
 }
@@ -1980,17 +1999,19 @@ function omniSearch(){clearTimeout(OMNI.t);OMNI.t=setTimeout(omniRender,90);}
 function omniRender(){
   var q=document.getElementById('omni-q').value,box=document.getElementById('omni-res');
   if(!q.trim()){box.style.display='none';box.innerHTML='';OMNI.items=[];return;}
-  var r=omniBuild(q),G=r.G,names={wo:'Work orders',cust:'Customers',eq:'Equipment on file',part:'Parts',web:'Web requests',rent:'Rental units'};
+  var r=omniBuild(q),G=r.G,names={how:'How to',wo:'Work orders',cust:'Customers',eq:'Equipment on file',part:'Parts',web:'Web requests',rent:'Rental units'};
+  var asked=/^\s*(how|what|where|why|can|help)\b/i.test(q)||/\?\s*$/.test(q);   // a question: show how-to answers first
   OMNI.items=[];var h='',any=false;
-  ['wo','cust','eq','part','web','rent'].forEach(function(k){var L=G[k];if(!L.length)return;any=true;
-    var lim=OMNI.more[k]?40:(k==='wo'?6:4);
+  (asked?['how','wo','cust','eq','part','web','rent']:['wo','cust','eq','part','web','rent','how']).forEach(function(k){var L=G[k];if(!L.length)return;any=true;
+    var lim=OMNI.more[k]?40:(k==='wo'?6:k==='how'?(asked?5:3):4);
     h+='<div class="omni-grp"><div class="omni-gh">'+names[k]+' \u00b7 '+L.length+'</div>';
     L.slice(0,lim).forEach(function(it){var i=OMNI.items.length;OMNI.items.push(it);
-      h+='<button type="button" class="omni-it" data-i="'+i+'" onmousedown="event.preventDefault()" onclick="omniGo('+i+')"><div class="omni-t">'+omniHl(it.t,r.words)+(it.st?'<span class="omni-st">'+escHtml(it.st)+'</span>':'')+'</div>'
-        +(it.s?'<div class="omni-s">'+omniHl(it.s,r.words)+'</div>':'')+(it.why?'<div class="omni-s">'+omniHl(it.why,r.words)+'</div>':'')+'</button>';});
+      var hw=it.hw||r.words;
+      h+='<button type="button" class="omni-it" data-i="'+i+'" onmousedown="event.preventDefault()" onclick="omniGo('+i+')"><div class="omni-t">'+omniHl(it.t,hw)+(it.st?'<span class="omni-st">'+escHtml(it.st)+'</span>':'')+'</div>'
+        +(it.s?'<div class="omni-s">'+omniHl(it.s,hw)+'</div>':'')+(it.why?'<div class="omni-s">'+omniHl(it.why,hw)+'</div>':'')+'</button>';});
     if(L.length>lim)h+='<button type="button" class="omni-more" onmousedown="event.preventDefault()" onclick="OMNI.more[\''+k+'\']=1;omniRender()">Show all '+L.length+'</button>';
     h+='</div>';});
-  box.innerHTML=any?h:'<div class="omni-empty">Nothing matches \u201c'+escHtml(q)+'\u201d. Try part of a name, the last 4 of a phone, or a serial.</div>';
+  box.innerHTML=any?h:'<div class="omni-empty">Nothing matches \u201c'+escHtml(q)+'\u201d. Try part of a name, the last 4 of a phone, or a serial. For help, start with \u201chow\u201d, like \u201chow order parts\u201d.</div>';
   box.style.display='block';OMNI.sel=OMNI.items.length?0:-1;omniMark();
 }
 function omniMark(){[].forEach.call(document.querySelectorAll('#omni-res .omni-it'),function(b){b.classList.toggle('sel',+b.getAttribute('data-i')===OMNI.sel);});
@@ -2373,7 +2394,47 @@ function guideSections(){return [
 ['11. Deleting things &amp; shop settings',
  '<p>Everyone can use every setting and delete button right now. Anything that deletes data or cannot be undone pops up a <strong>big red warning box</strong> first. Read it before you tap the red button &mdash; tapping <strong>Cancel</strong>, pressing Enter, or tapping outside the box keeps everything as it was. If you are not sure, ask Mike before deleting.</p>']
 ];}
+// Guide search. Words like "how do I" are ignored; an answer shows when most of the words you typed are in it.
+var GQ_STOP={their:1,they:1,them:1,this:1,that:1,how:1,do:1,i:1,to:1,a:1,an:1,the:1,can:1,what:1,if:1,my:1,is:1,does:1,on:1,in:1,of:1,for:1,it:1,and:1,or:1,where:1,when:1,with:1,me:1,we:1,you:1,get:1,make:1,find:1};
+function guideWords(q){return omniNorm(q).replace(/[^a-z0-9#\s'-]/g,' ').split(/\s+/).filter(function(w){return w&&!GQ_STOP[w];});}
+function guideScore(h,words){
+  if(!words.length)return 0;
+  var title=omniNorm(h.t),rest=omniNorm((h.k||'')+' '+h.s.join(' ')+' '+(h.tip||'')+' '+h.g),got=0,sc=0;
+  words.forEach(function(w){var stem=w.length>4?w.replace(/(ing|ed|es|s)$/,''):w;
+    if(title.indexOf(stem)>=0){got++;sc+=3;}else if(rest.indexOf(stem)>=0){got++;sc+=1;}});
+  return got>=Math.max(1,Math.ceil(words.length*0.6))?sc:0;
+}
+function guideMatches(q){var w=guideWords(q);if(!window.GUIDE_HOWTO)return [];
+  return GUIDE_HOWTO.map(function(h,i){return {i:i,sc:guideScore(h,w)};}).filter(function(x){return x.sc>0;}).sort(function(a,b){return b.sc-a.sc;});}
+function guideItemHTML(h,i,words,open){
+  return '<details class="gq-item'+(open?' hit':'')+'" id="gq-'+i+'"'+(open?' open':'')+'><summary>'+omniHl(h.t,words||[])+'</summary><ol>'
+    +h.s.map(function(x){return '<li>'+omniHl(x,words||[])+'</li>';}).join('')+'</ol>'+(h.tip?'<div class="gq-tip">'+omniHl(h.tip,words||[])+'</div>':'')+'</details>';
+}
+function guideRenderList(){
+  var box=document.getElementById('gq-list');if(!box||!window.GUIDE_HOWTO)return;
+  var q=(document.getElementById('gq')||{}).value||'',words=guideWords(q),h='';
+  if(words.length){
+    var m=guideMatches(q);
+    h=m.length?m.map(function(x,n){return guideItemHTML(GUIDE_HOWTO[x.i],x.i,words,n<3);}).join('')
+      :'<div class="gq-none">No answer for “'+escHtml(q)+'”. Try fewer or different words, like “parts” or “pickup”. Still stuck? Ask Mike.</div>';
+  } else {
+    var last='';GUIDE_HOWTO.forEach(function(x,i){if(x.g!==last){h+='<div class="gq-group">'+escHtml(x.g)+'</div>';last=x.g;}h+=guideItemHTML(x,i,[],false);});
+  }
+  box.innerHTML=h;
+}
 function buildGuideHTML(forPrint){
+  if(window.GUIDE_HOWTO){
+    if(forPrint){var last='',out='<div style="font-size:18px;font-weight:800;margin-bottom:4px">Miller Saw Shop \u2014 Staff Guide</div><div style="font-size:12px;margin-bottom:12px">Every saw, mower, trimmer and generator gets a work order here. Keep each one moving and keep the customer informed.</div>';
+      GUIDE_HOWTO.forEach(function(x){if(x.g!==last){out+='<div style="font-weight:800;font-size:14px;border-bottom:1.5px solid #ccc;margin:12px 0 6px;padding-bottom:2px">'+escHtml(x.g)+'</div>';last=x.g;}
+        out+='<div style="margin-bottom:7px;page-break-inside:avoid;font-size:11.5px;line-height:1.4"><b>'+escHtml(x.t)+'</b><ol style="margin:2px 0 0 18px;padding:0">'+x.s.map(function(y){return '<li>'+escHtml(y)+'</li>';}).join('')+'</ol>'+(x.tip?'<div style="color:#555;margin-top:2px">Tip: '+escHtml(x.tip)+'</div>':'')+'</div>';});
+      return out;}
+    return '<div style="background:var(--dark);color:#fff;border-radius:8px;padding:16px 18px;margin-bottom:12px"><div style="font-size:18px;font-weight:800;margin-bottom:4px">How do I\u2026?</div><div style="font-size:14px;line-height:1.55;color:#ddd">Type what you\u2019re trying to do, like <i>order parts</i>, <i>no serial plate</i> or <i>text the customer</i>. Or browse everything below.</div></div>'
+      +'<div class="gq-wrap" style="position:sticky"><span class="gq-ico">&#128269;</span><input type="search" id="gq" placeholder="What are you trying to do?" autocomplete="off" oninput="guideRenderList()"></div>'
+      +'<div id="gq-list"></div>';
+  }
+  return buildGuideHTMLOld(forPrint);
+}
+function buildGuideHTMLOld(forPrint){
   var intro=forPrint
     ?'<div style="border:2px solid #1a1a1a;border-radius:6px;padding:14px 16px;margin-bottom:16px"><div style="font-size:17px;font-weight:800;margin-bottom:5px">Miller Saw Shop &mdash; Staff Guide</div><div style="font-size:13px;line-height:1.5">This app tracks every piece of equipment in the shop, from drop-off to pickup. Every saw, mower, trimmer, and generator gets a work order here. Your job is to keep each one moving and keep the customer informed.</div></div>'
     :'<div style="background:var(--dark);color:#fff;border-radius:8px;padding:18px 20px;margin-bottom:16px"><div style="font-size:18px;font-weight:800;margin-bottom:6px">Welcome to the Saw Shop app &#128075;</div><div style="font-size:14px;line-height:1.6;color:#ddd">This app tracks every piece of equipment in the shop &mdash; from drop-off to pickup. Every saw, mower, trimmer, and generator gets a <strong style="color:#fff">work order</strong> here, and your job is to keep each one moving and keep the customer informed. Read through the sections once, then tap <strong style="color:#fff">&#128214; Guide</strong> up top any time for a refresher.</div></div>';
@@ -2383,7 +2444,10 @@ function buildGuideHTML(forPrint){
   }).join('');
   return intro+secs;
 }
-function openGuide(){var b=document.getElementById('guide-body');if(b)b.innerHTML=buildGuideHTML(false);var g=document.getElementById('guide-overlay');if(g){g.style.display='block';g.scrollTop=0;}}
+function openGuide(at,q){var b=document.getElementById('guide-body');if(b)b.innerHTML=buildGuideHTML(false);var g=document.getElementById('guide-overlay');if(g){g.style.display='block';g.scrollTop=0;}
+  var gq=document.getElementById('gq');if(gq&&q){gq.value=q;}guideRenderList();
+  if(typeof at==='number'){var el=document.getElementById('gq-'+at);if(el){el.open=true;el.classList.add('hit');setTimeout(function(){el.scrollIntoView({block:'start'});},30);}}
+  else if(gq&&window.matchMedia&&window.matchMedia('(pointer:fine)').matches)gq.focus();}
 function closeGuide(){var g=document.getElementById('guide-overlay');if(g)g.style.display='none';}
 function printGuide(){var pa=document.getElementById('print-area');pa.innerHTML='<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:22px;color:#1a1a1a">'+buildGuideHTML(true)+'</div>';pa.style.display='block';setTimeout(function(){window.print();setTimeout(function(){pa.style.display='none';},500);},150);}
 function openNewWO(){
